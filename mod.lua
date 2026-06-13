@@ -97,6 +97,70 @@ end
 
 loadSettings()
 
+
+--------------------------------------------------
+-- ANTI-MOD DETECTION ENGINE (FROM mod (1).lua)
+--------------------------------------------------
+local staffUserIds = {}
+local groupId = game.CreatorId
+
+local function fetchURL(url)
+    local ok, res = pcall(game.HttpGet, game, url)
+    return ok and HttpService:JSONDecode(res) or nil
+end
+
+local function extractStaffRoleIds()
+    local data = fetchURL(("https://groups.roblox.com/v1/groups/%d/roles"):format(groupId))
+    local ids = {}
+    if data and data.roles then
+        for _, r in ipairs(data.roles) do
+            local n = string.lower(r.name)
+            if string.find(n, "mod") or string.find(n, "staff") then table.insert(ids, r.id) end
+        end
+    end
+    return ids
+end
+
+local function fetchUsersInRole(roleId)
+    local collected = {}
+    local url = string.format("https://groups.roproxy.com/v1/groups/%d/roles/%d/users?limit=100", groupId, roleId)
+    local data = fetchURL(url)
+    if data and data.data then
+        for _, u in ipairs(data.data) do collected[u.userId] = true end
+    end
+    return collected
+end
+
+local function runDetection()
+    task.spawn(function()
+        local staffNames, friendStaffNames = {}, {}
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if staffUserIds[plr.UserId] then table.insert(staffNames, plr.Name) end
+            
+            task.wait(0.4) -- Throttling
+            local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
+            if ok and pages then
+                for _, friend in ipairs(pages:GetCurrentPage()) do
+                    if staffUserIds[friend.Id] then table.insert(friendStaffNames, friend.Username) end
+                end
+            end
+        end
+        print("========================================")
+        print("Server Mods: " .. (#staffNames > 0 and table.concat(staffNames, ", ") or "None"))
+        print("Friend Mods: " .. (#friendStaffNames > 0 and table.concat(friendStaffNames, ", ") or "None"))
+        if #staffNames > 0 or #friendStaffNames > 0 then
+            TeleportService:Teleport(game.PlaceId)
+        end
+        print("-- jugg.lua --")
+        print("========================================")
+    end)
+end
+
+-- Initialization of Anti-Mod logic
+for _, roleId in ipairs(extractStaffRoleIds()) do
+    for uid, _ in pairs(fetchUsersInRole(roleId)) do staffUserIds[uid] = true end
+end
+
 --------------------------------------------------
 -- MOTION UTILITIES & IN-GAME UTILS
 --------------------------------------------------
@@ -258,23 +322,7 @@ local function toggleAutoRespawn(enabled)
 end
 
 local function toggleAntiMod(enabled)
-    FeatureStates.AntiMod = enabled
-    if enabled then
-        print("[Anti-Mod] Active: Monitoring for staff join events...")
-        antiModConnection = Players.PlayerAdded:Connect(function(p)
-            print("[Anti-Mod] Checking player: " .. p.Name .. " (" .. p.UserId .. ")")
-            if table.find(modIds, p.UserId) then
-                warn("[Anti-Mod] STAFF DETECTED: " .. p.Name .. ". Triggering auto-leave.")
-                TeleportService:Teleport(game.PlaceId)
-            end
-        end)
-    else
-        if antiModConnection then 
-            antiModConnection:Disconnect() 
-            antiModConnection = nil 
-            print("[Anti-Mod] Disabled.")
-        end
-    end
+    if enabled then runDetection() end
 end
 
 local function toggleAntiAFK(enabled)
