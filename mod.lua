@@ -260,23 +260,20 @@ end
 local function toggleAntiMod(enabled)
     FeatureStates.AntiMod = enabled
     if enabled then
-        antiModThread = task.spawn(function()
-            pcall(function()
-                -- Invokes the clean localized mod script engine directly
-                loadstring(readfile("jugglua/mod.lua"))()
-            end)
+        print("[Anti-Mod] Active: Monitoring for staff join events...")
+        antiModConnection = Players.PlayerAdded:Connect(function(p)
+            print("[Anti-Mod] Checking player: " .. p.Name .. " (" .. p.UserId .. ")")
+            if table.find(modIds, p.UserId) then
+                warn("[Anti-Mod] STAFF DETECTED: " .. p.Name .. ". Triggering auto-leave.")
+                TeleportService:Teleport(game.PlaceId)
+            end
         end)
     else
-        if antiModThread then 
-            task.cancel(antiModThread) 
-            antiModThread = nil 
+        if antiModConnection then 
+            antiModConnection:Disconnect() 
+            antiModConnection = nil 
+            print("[Anti-Mod] Disabled.")
         end
-        -- Clean up components safely if they exist
-        local coregui = gethui() or game:GetService("CoreGui")
-        local leaveUi = coregui:FindFirstChild("ModAlertLeaveUI")
-        if leaveUi then leaveUi:Destroy() end
-        local activeSound = workspace:FindFirstChild("JuggModNotifySound")
-        if activeSound then activeSound:Destroy() end
     end
 end
 
