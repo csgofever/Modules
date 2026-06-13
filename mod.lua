@@ -454,6 +454,7 @@ local function InitializeMainMenu()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "JuggProfileGui"
     ScreenGui.ResetOnSpawn = false
+    ScreenGui.DisplayOrder = 2136372536
     ScreenGui.Parent = targetGui
 
     local MainFrame = Instance.new("Frame")
