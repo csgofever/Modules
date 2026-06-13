@@ -106,6 +106,20 @@ loadSettings()
 --------------------------------------------------
 local staffUserIds = {}
 local groupId = game.CreatorId
+local notify_sound = nil
+local CACHE_FILE = "jugglua/modDetect_" .. groupId .. ".json"
+
+if game.CreatorType ~= Enum.CreatorType.Group then
+    return
+end
+
+task.spawn(function()
+    if not isfile("jugglua/modDetect.mp3") then writefile("jugglua/modDetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
+    notify_sound = Instance.new("Sound", workspace)
+    notify_sound.SoundId = getcustomasset("jugglua/modDetect.mp3")
+    notify_sound.Volume = 3
+    notify_sound.Looped = true
+end)
 
 local function fetchURL(url)
     local ok, res = pcall(game.HttpGet, game, url)
@@ -140,7 +154,7 @@ local function runDetection()
         for _, plr in ipairs(Players:GetPlayers()) do
             if staffUserIds[plr.UserId] then table.insert(staffNames, plr.Name) end
             
-            task.wait(0.4) -- Throttling
+            task.wait(0.035) -- Throttling
             local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
             if ok and pages then
                 for _, friend in ipairs(pages:GetCurrentPage()) do
@@ -152,7 +166,9 @@ local function runDetection()
         print("Server Mods: " .. (#staffNames > 0 and table.concat(staffNames, ", ") or "None"))
         print("Friend Mods: " .. (#friendStaffNames > 0 and table.concat(friendStaffNames, ", ") or "None"))
         if #staffNames > 0 or #friendStaffNames > 0 then
-            TeleportService:Teleport(game.PlaceId)
+            notify_sound:Play()
+			task.wait(2.6)
+            TeleportService:Teleport(17625359962)
         end
         print("-- jugg.lua --")
         print("========================================")
@@ -164,10 +180,12 @@ for _, roleId in ipairs(extractStaffRoleIds()) do
     for uid, _ in pairs(fetchUsersInRole(roleId)) do staffUserIds[uid] = true end
 end
 
+--staffUserIds[3951615367] = true --testuserid
 
 --------------------------------------------------
 -- AUTO EXECUTE / TELEPORT INTEGRATION (FROM MOD.LUA)
 --------------------------------------------------
+
 local function setupAutoExecute()
     pcall(function()
         if not Settings.AutoExecute then return end
