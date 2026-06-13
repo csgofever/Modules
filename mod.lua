@@ -1,85 +1,695 @@
---Rivals Only!!
---원작자(.antilua.)의 허락 없이 2차 창작물을 제작하거나 배포하는 것을 금지합니다.
---The creation or distribution of derivative works without the permission of the original author (.antilua.) is prohibited.
---Original Script는 loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Ukrubojvo/Modules/main/StaffDetector.lua"))() 입니다!
+--[[
+    ╔═══════════════════════════════════════╗
+    ║       JUGG RIVALS PREMIUM MENU        ║
+    ║         Exact UI Profile Match        ║
+    ║         File Binding: jugg.lua        ║
+    ╚═══════════════════════════════════════╝
+]]
 
-_G.autoload = true
-_G.autoleave = true
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Camera = workspace.CurrentCamera
 
-xpcall(function()
-    if (game.GameId ~= 6035872082) then return end
-    if shared.StaffDetectorLoading then return end
-    shared.StaffDetectorLoading = true
-    repeat task.wait() until game:IsLoaded()
-    local cloneref = cloneref or function(obj)
-        return obj
+local LocalPlayer = Players.LocalPlayer
+local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- CLEAR COMPONENT: Wipes out previous menus to stop duplicate rendering
+local targetGui = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+for _, oldUi in pairs(targetGui:GetChildren()) do
+    if oldUi.Name == "JuggProfileGui" or oldUi.Name == "JuggPremiumGui" or oldUi.Name == "JuggWatermark" then
+        oldUi:Destroy()
+    end
+end
+
+local RegisteredUIComponents = {}
+
+--------------------------------------------------
+-- SAVED CONFIGURATIONS (ISOLATED TO JUGGLUA FOLDER)
+--------------------------------------------------
+local FOLDER_NAME = "jugglua"
+local CONFIG_FILE = FOLDER_NAME .. "/jugg_config.json"
+
+local Settings = {
+    UIColor = Color3.fromRGB(147, 51, 234), 
+    UITransparency = 0,
+    AnimationSpeed = 0.2,
+    ToggleKey = Enum.KeyCode.RightShift,
+}
+
+local FeatureStates = {
+    OrbitAura = false,
+    SmoothOrbit = false,
+    AutoCollect = false,
+    AutoRespawn = false,
+    AntiMod = false,
+    AntiAFK = false,
+    FPSBoost = false,
+}
+
+local function saveSettings()
+    if makefolder and isfolder and not isfolder(FOLDER_NAME) then
+        pcall(function() makefolder(FOLDER_NAME) end)
     end
 
--- =========================================================================
--- Jugg Rivals Logo Overlay (Instant Execution Mode)
--- =========================================================================
-task.spawn(function()
-    -- Staggers the thread to prevent startup lag spikes
-    task.wait(4)
-
-    local coregui = gethui() or game:GetService("CoreGui")
-    local TS = game:GetService("TweenService")
-    local RunService = game:GetService("RunService")
+    local saveData = {
+        Settings = {
+            UIColor = {Settings.UIColor.R, Settings.UIColor.G, Settings.UIColor.B},
+            UITransparency = Settings.UITransparency,
+            AnimationSpeed = Settings.AnimationSpeed,
+            ToggleKey = Settings.ToggleKey.Name,
+        },
+        FeatureStates = FeatureStates
+    }
     
-    local WatermarkGui = Instance.new("ScreenGui")
-    WatermarkGui.Name = "JuggWatermark"
-    WatermarkGui.DisplayOrder = 2147483647
-    WatermarkGui.Parent = coregui
+    if writefile then
+        pcall(function() writefile(CONFIG_FILE, HttpService:JSONEncode(saveData)) end)
+    end
+end
 
-    -- Expanded width and height to securely hide the underlying Rivals artwork
-    local Container = Instance.new("Frame")
-    Container.Size = UDim2.new(0, 750, 0, 260) 
-    Container.Position = UDim2.new(0.5, 0, 0.5, -25) -- Centered precisely over the main graphic area
-    Container.AnchorPoint = Vector2.new(0.5, 0.5)
-    Container.BackgroundTransparency = 1
-    Container.Rotation = 0
-    Container.Parent = WatermarkGui
+local updateUIToggleVisual
 
-    -- Main "jugg" logo
-    local TextLabel = Instance.new("TextLabel")
-    TextLabel.Size = UDim2.new(1, 0, 0, 190) 
-    TextLabel.BackgroundTransparency = 1
-    TextLabel.Text = "<i>jugg</i>"
-    TextLabel.RichText = true
-    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextLabel.TextScaled = true
-    TextLabel.Font = Enum.Font.ArialBold
-    TextLabel.TextTransparency = 1
-    TextLabel.Parent = Container
+local function loadSettings()
+    if not isfile or not isfile(CONFIG_FILE) then return end
+    if readfile then
+        pcall(function()
+            local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if data then
+                if data.Settings then
+                    if data.Settings.UIColor then Settings.UIColor = Color3.new(data.Settings.UIColor[1], data.Settings.UIColor[2], data.Settings.UIColor[3]) end
+                    if data.Settings.UITransparency ~= nil then Settings.UITransparency = data.Settings.UITransparency end
+                    if data.Settings.AnimationSpeed ~= nil then Settings.AnimationSpeed = data.Settings.AnimationSpeed end
+                    if data.Settings.ToggleKey then Settings.ToggleKey = Enum.KeyCode[data.Settings.ToggleKey] end
+                end
+                if data.FeatureStates then
+                    for key, value in pairs(data.FeatureStates) do FeatureStates[key] = value end
+                end
+            end
+        end)
+    end
+end
 
-    local Stroke = Instance.new("UIStroke")
-    Stroke.Color = Color3.fromRGB(15, 15, 20)
-    Stroke.Thickness = 14 -- Thicker stroke acting as a masking shield
-    Stroke.Transparency = 1
-    Stroke.Parent = TextLabel
+loadSettings()
 
-    -- Subtitle showing Auto-Leave status directly under the logo
-    local SubtitleLabel = Instance.new("TextLabel")
-    SubtitleLabel.Size = UDim2.new(1, 0, 0, 35)
-    SubtitleLabel.Position = UDim2.new(0, 0, 0, 195) 
-    SubtitleLabel.BackgroundTransparency = 1
-    SubtitleLabel.Text = _G.autoleave and "<i>the best lua</i>" or "<i>the best lua</i>"
-    SubtitleLabel.RichText = true 
-    SubtitleLabel.TextColor3 = _G.autoleave and Color3.fromRGB(140, 20, 255) or Color3.fromRGB(140, 20, 255)
-    SubtitleLabel.TextSize = 24
-    SubtitleLabel.Font = Enum.Font.GothamBold
-    SubtitleLabel.TextTransparency = 1
-    SubtitleLabel.Parent = Container
+--------------------------------------------------
+-- MOTION UTILITIES & IN-GAME UTILS
+--------------------------------------------------
+local function createTween(instance, properties, duration)
+    local tweenInfo = TweenInfo.new(duration or Settings.AnimationSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(instance, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
 
-    local SubtitleStroke = Instance.new("UIStroke")
-    SubtitleStroke.Color = Color3.fromRGB(10, 10, 10)
-    SubtitleStroke.Thickness = 3
-    SubtitleStroke.Transparency = 1
-    SubtitleStroke.Parent = SubtitleLabel
+local function addCorner(parent, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 6)
+    corner.Parent = parent
+    return corner
+end
 
-    -- Vibrant Rainbow Gradient Spectrum
-    local UIGradient = Instance.new("UIGradient")
-    UIGradient.Color = ColorSequence.new({
+local function addSafeBorder(parent, color)
+    local success, stroke = pcall(function()
+        local s = Instance.new("UIStroke")
+        s.Color = color or Color3.fromRGB(35, 35, 42)
+        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        s.Parent = parent
+        return s
+    end)
+    if not success then
+        local line = Instance.new("Frame")
+        line.Size = UDim2.new(1, 0, 0, 1)
+        line.Position = UDim2.new(0, 0, 1, -1)
+        line.BackgroundColor3 = color or Color3.fromRGB(35, 35, 42)
+        line.BorderSizePixel = 0
+        line.Parent = parent
+    end
+end
+
+local function makeDraggable(frame, handle)
+    local dragging, dragInput, dragStart, startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then update(input) end
+    end)
+end
+
+-- Feature Modules
+local VOID_POS = Vector3.new(0, -500, 0)
+local orbitConnection, smoothOrbitConnection, collectConnection, antiModThread, antiAFKConnection
+
+local function getClosestEnemy()
+    local closest, shortestDist = nil, math.huge
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character then
+            local enemyHrp = v.Character:FindFirstChild("HumanoidRootPart")
+            local enemyHum = v.Character:FindFirstChild("Humanoid")
+            if enemyHrp and enemyHum and enemyHum.Health > 0 then
+                local dist = (hrp.Position - enemyHrp.Position).Magnitude
+                if dist < shortestDist then shortestDist = dist closest = v.Character end
+            end
+        end
+    end
+    return closest
+end
+
+local function toggleOrbitAura(enabled)
+    FeatureStates.OrbitAura = enabled
+    if enabled then
+        local orbitAngle = 0
+        orbitConnection = RunService.Stepped:Connect(function()
+            if character and hrp then
+                if hrp.Position.Y > -450 then hrp.CFrame = CFrame.new(VOID_POS) end
+                local enemy = getClosestEnemy()
+                if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                    orbitAngle = orbitAngle + 2
+                    local x = math.cos(math.rad(orbitAngle)) * 10
+                    local z = math.sin(math.rad(orbitAngle)) * 10
+                    Camera.CFrame = CFrame.new(VOID_POS, enemy.HumanoidRootPart.Position + Vector3.new(x, 5, z))
+                end
+            end
+        end)
+    else
+        if orbitConnection then orbitConnection:Disconnect() orbitConnection = nil end
+    end
+end
+
+local function toggleSmoothOrbit(enabled)
+    FeatureStates.SmoothOrbit = enabled
+    if enabled then
+        local smoothOrbitAngle = 0
+        smoothOrbitConnection = RunService.RenderStepped:Connect(function()
+            if not hrp then return end
+            smoothOrbitAngle = (smoothOrbitAngle + 4) % 360
+            local targetPos = VOID_POS + Vector3.new(math.cos(math.rad(smoothOrbitAngle)) * 4, 5, math.sin(math.rad(smoothOrbitAngle)) * 4)
+            hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(targetPos), 0.15)
+            local enemy = getClosestEnemy()
+            if enemy and enemy:FindFirstChild("HumanoidRootPart") then Camera.CFrame = CFrame.new(hrp.Position, enemy.HumanoidRootPart.Position) end
+        end)
+    else
+        if smoothOrbitConnection then smoothOrbitConnection:Disconnect() smoothOrbitConnection = nil end
+    end
+end
+
+local function toggleAutoCollect(enabled)
+    FeatureStates.AutoCollect = enabled
+    if enabled then
+        collectConnection = RunService.RenderStepped:Connect(function()
+            if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+            for _, obj in pairs(workspace:GetChildren()) do
+                if obj.Name == "_drop" and obj:IsA("BasePart") then
+                    firetouchinterest(character.HumanoidRootPart, obj, 0)
+                    firetouchinterest(character.HumanoidRootPart, obj, 1)
+                end
+            end
+        end)
+    else
+        if collectConnection then collectConnection:Disconnect() collectConnection = nil end
+    end
+end
+
+local function setupRespawn(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    humanoid.Died:Connect(function()
+        if not FeatureStates.AutoRespawn then return end
+        task.wait()
+        pcall(function()
+            local rem = ReplicatedStorage:FindFirstChild("Remotes")
+            if rem then
+                local target = rem:FindFirstChild("RespawnNow") or rem:FindFirstChild("Respawn")
+                if target then target:FireServer() end
+            end
+        end)
+    end)
+end
+
+local function toggleAutoRespawn(enabled)
+    FeatureStates.AutoRespawn = enabled
+    if enabled and character then setupRespawn(character) end
+end
+
+local function toggleAntiMod(enabled)
+    FeatureStates.AntiMod = enabled
+    if enabled then
+        antiModThread = task.spawn(function()
+            pcall(function()
+                -- Invokes the clean localized mod script engine directly
+                loadstring(readfile("jugglua/mod.lua"))()
+            end)
+        end)
+    else
+        if antiModThread then 
+            task.cancel(antiModThread) 
+            antiModThread = nil 
+        end
+        -- Clean up components safely if they exist
+        local coregui = gethui() or game:GetService("CoreGui")
+        local leaveUi = coregui:FindFirstChild("ModAlertLeaveUI")
+        if leaveUi then leaveUi:Destroy() end
+        local activeSound = workspace:FindFirstChild("JuggModNotifySound")
+        if activeSound then activeSound:Destroy() end
+    end
+end
+
+local function toggleAntiAFK(enabled)
+    FeatureStates.AntiAFK = enabled
+    if enabled then
+        local vu = game:GetService("VirtualUser")
+        antiAFKConnection = LocalPlayer.Idled:Connect(function() vu:Button2Down(Vector2.new(0,0), Camera.CFrame) task.wait(0.5) vu:Button2Up(Vector2.new(0,0), Camera.CFrame) end)
+    else
+        if antiAFKConnection then antiAFKConnection:Disconnect() antiAFKConnection = nil end
+    end
+end
+
+local function toggleFPSBoost(enabled)
+    FeatureStates.FPSBoost = enabled
+    if enabled then
+        Lighting.GlobalShadows = false
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Part") or v:IsA("MeshPart") then v.Material = Enum.Material.Plastic elseif v:IsA("Decal") then v.Transparency = 1 end
+        end
+    end
+end
+
+--------------------------------------------------
+-- MAIN MENU GENERATION
+--------------------------------------------------
+local function InitializeMainMenu()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "JuggProfileGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = targetGui
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 500, 0, 320)
+    MainFrame.Position = UDim2.new(0.5, -250, 0.5, -160)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 11)
+    MainFrame.BackgroundTransparency = Settings.UITransparency
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
+    addCorner(MainFrame, 8)
+    addSafeBorder(MainFrame, Color3.fromRGB(28, 28, 35))
+
+    local Sidebar = Instance.new("Frame")
+    Sidebar.Name = "Sidebar"
+    Sidebar.Size = UDim2.new(0, 130, 1, 0)
+    Sidebar.BackgroundColor3 = Color3.fromRGB(7, 7, 9)
+    Sidebar.BorderSizePixel = 0
+    Sidebar.Parent = MainFrame
+    addCorner(Sidebar, 8)
+
+    local SidebarDivider = Instance.new("Frame")
+    SidebarDivider.Size = UDim2.new(0, 1, 1, 0)
+    SidebarDivider.Position = UDim2.new(1, -1, 0, 0)
+    SidebarDivider.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    SidebarDivider.BorderSizePixel = 0
+    SidebarDivider.Parent = Sidebar
+
+    local DragHandle = Instance.new("Frame")
+    DragHandle.Name = "DragHandle"
+    DragHandle.Size = UDim2.new(1, 0, 0, 45)
+    DragHandle.BackgroundTransparency = 1
+    DragHandle.Parent = Sidebar
+
+    local LogoLabel = Instance.new("TextLabel")
+    LogoLabel.Size = UDim2.new(1, 0, 1, 0)
+    LogoLabel.Position = UDim2.new(0, 14, 0, 0)
+    LogoLabel.BackgroundTransparency = 1
+    LogoLabel.Text = "jugg.lua"
+    LogoLabel.TextColor3 = Settings.UIColor
+    LogoLabel.Font = Enum.Font.GothamBold
+    LogoLabel.TextSize = 14
+    LogoLabel.TextXAlignment = Enum.TextXAlignment.Left
+    LogoLabel.Parent = DragHandle
+
+    makeDraggable(MainFrame, MainFrame)
+    makeDraggable(MainFrame, DragHandle)
+
+    local NavigationList = Instance.new("Frame")
+    NavigationList.Size = UDim2.new(1, -16, 1, -60)
+    NavigationList.Position = UDim2.new(0, 8, 0, 50)
+    NavigationList.BackgroundTransparency = 1
+    NavigationList.Parent = Sidebar
+
+    local NavLayout = Instance.new("UIListLayout")
+    NavLayout.Padding = UDim.new(0, 5)
+    NavLayout.Parent = NavigationList
+
+    local ContentArea = Instance.new("Frame")
+    ContentArea.Name = "ContentArea"
+    ContentArea.Size = UDim2.new(1, -145, 1, -20)
+    ContentArea.Position = UDim2.new(0, 140, 0, 10)
+    ContentArea.BackgroundTransparency = 1
+    ContentArea.Parent = MainFrame
+
+    updateUIToggleVisual = function(configKey, isSettingTable)
+        local component = RegisteredUIComponents[configKey]
+        if not component then return end
+        
+        local isActive = isSettingTable and Settings[configKey] or FeatureStates[configKey]
+        local pin = component:FindFirstChild("Pin", true)
+        local track = component:FindFirstChild("Track", true)
+        
+        if pin and track then
+            if isActive then
+                createTween(pin, {Position = UDim2.new(1, -15, 0.5, -5)}, 0.12)
+                createTween(track, {BackgroundColor3 = Settings.UIColor}, 0.12)
+            else
+                createTween(pin, {Position = UDim2.new(0, 3, 0.5, -5)}, 0.12)
+                createTween(track, {BackgroundColor3 = Color3.fromRGB(34, 34, 38)}, 0.12)
+            end
+        end
+    end
+
+    local tabs = {}
+    local function createTab(name)
+        local TabButton = Instance.new("TextButton")
+        TabButton.Size = UDim2.new(1, 0, 0, 32)
+        TabButton.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+        TabButton.BackgroundTransparency = 1
+        TabButton.Text = name
+        TabButton.TextColor3 = Color3.fromRGB(130, 130, 135)
+        TabButton.Font = Enum.Font.GothamMedium
+        TabButton.TextSize = 12
+        TabButton.TextXAlignment = Enum.TextXAlignment.Left
+        TabButton.Parent = NavigationList
+        addCorner(TabButton, 5)
+        
+        local Pad = Instance.new("UIPadding")
+        Pad.PaddingLeft = UDim.new(0, 12)
+        Pad.Parent = TabButton
+
+        local TabPage = Instance.new("ScrollingFrame")
+        TabPage.Size = UDim2.new(1, 0, 1, 0)
+        TabPage.BackgroundTransparency = 1
+        TabPage.Visible = false
+        TabPage.ScrollBarThickness = 0
+        TabPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        TabPage.Parent = ContentArea
+        
+        local PageLayout = Instance.new("UIListLayout")
+        PageLayout.Padding = UDim.new(0, 6)
+        PageLayout.Parent = TabPage
+        
+        TabButton.MouseButton1Click:Connect(function()
+            for _, t in pairs(tabs) do
+                t.Page.Visible = false
+                createTween(t.Btn, {BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(130, 130, 135)}, 0.12)
+            end
+            TabPage.Visible = true
+            createTween(TabButton, {BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.12)
+        end)
+        
+        tabs[name] = {Btn = TabButton, Page = TabPage}
+        return TabPage
+    end
+
+    local function createToggleRow(parent, label, configKey, isSettingTable, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.BorderSizePixel = 0
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -60, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+        
+        local ClickZone = Instance.new("TextButton")
+        ClickZone.Size = UDim2.new(0, 32, 0, 16)
+        ClickZone.Position = UDim2.new(1, -44, 0.5, -8)
+        ClickZone.BackgroundTransparency = 1
+        ClickZone.Text = ""
+        ClickZone.Parent = Row
+        
+        local Track = Instance.new("Frame")
+        Track.Name = "Track"
+        Track.Size = UDim2.new(1, 0, 1, 0)
+        Track.BackgroundColor3 = Color3.fromRGB(34, 34, 38)
+        Track.BorderSizePixel = 0
+        Track.Parent = ClickZone
+        addCorner(Track, 8)
+        
+        local Pin = Instance.new("Frame")
+        Pin.Name = "Pin"
+        Pin.Size = UDim2.new(0, 10, 0, 10)
+        Pin.Position = UDim2.new(0, 3, 0.5, -5)
+        Pin.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Pin.BorderSizePixel = 0
+        Pin.Parent = ClickZone
+        addCorner(Pin, 5)
+        
+        RegisteredUIComponents[configKey] = Row
+        
+        ClickZone.MouseButton1Click:Connect(function()
+            local cur = isSettingTable and Settings[configKey] or FeatureStates[configKey]
+            local newVal = not cur
+            if isSettingTable then Settings[configKey] = newVal else FeatureStates[configKey] = newVal end
+            updateUIToggleVisual(configKey, isSettingTable)
+            callback(newVal)
+        end)
+    end
+
+    local function createActionButton(parent, label, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.BorderSizePixel = 0
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -110, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local ActionBtn = Instance.new("TextButton")
+        ActionBtn.Size = UDim2.new(0, 90, 0, 24)
+        ActionBtn.Position = UDim2.new(1, -102, 0.5, -12)
+        ActionBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        ActionBtn.Text = "Save Config"
+        ActionBtn.TextColor3 = Settings.UIColor
+        ActionBtn.Font = Enum.Font.GothamBold
+        ActionBtn.TextSize = 10
+        ActionBtn.Parent = Row
+        addCorner(ActionBtn, 4)
+        addSafeBorder(ActionBtn, Color3.fromRGB(35, 35, 45))
+
+        ActionBtn.MouseButton1Click:Connect(function()
+            createTween(ActionBtn, {BackgroundColor3 = Settings.UIColor}, 0.08)
+            ActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            callback()
+            task.wait(0.1)
+            createTween(ActionBtn, {BackgroundColor3 = Color3.fromRGB(24, 24, 30)}, 0.12)
+            ActionBtn.TextColor3 = Settings.UIColor
+        end)
+    end
+
+    local function createKeybindSelector(parent, label, configKey)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -100, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+        
+        local BindBtn = Instance.new("TextButton")
+        BindBtn.Size = UDim2.new(0, 80, 0, 22)
+        BindBtn.Position = UDim2.new(1, -92, 0.5, -11)
+        BindBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        BindBtn.Text = Settings[configKey].Name
+        BindBtn.TextColor3 = Settings.UIColor
+        BindBtn.Font = Enum.Font.GothamBold
+        BindBtn.TextSize = 10
+        BindBtn.Parent = Row
+        addCorner(BindBtn, 4)
+        addSafeBorder(BindBtn, Color3.fromRGB(35, 35, 45))
+        
+        local listening = false
+        BindBtn.MouseButton1Click:Connect(function()
+            listening = true
+            BindBtn.Text = "..."
+        end)
+        
+        UserInputService.InputBegan:Connect(function(input)
+            if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+                if input.KeyCode == Enum.KeyCode.Escape then
+                    BindBtn.Text = Settings[configKey].Name
+                    listening = false
+                else
+                    Settings[configKey] = input.KeyCode
+                    BindBtn.Text = input.KeyCode.Name
+                    listening = false
+                end
+            end
+        end)
+    end
+
+    local JuggPage = createTab("Jugg")
+    local MiscPage = createTab("Misc")
+    local SettingsPage = createTab("Settings")
+
+    tabs["Jugg"].Page.Visible = true
+    tabs["Jugg"].Btn.BackgroundTransparency = 0
+    tabs["Jugg"].Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+    createToggleRow(JuggPage, "Orbit Kill Aura", "OrbitAura", false, toggleOrbitAura)
+    createToggleRow(JuggPage, "Smooth Orbit", "SmoothOrbit", false, toggleSmoothOrbit)
+    createToggleRow(JuggPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
+    createToggleRow(JuggPage, "Auto Respawn", "AutoRespawn", false, toggleAutoRespawn)
+
+    createToggleRow(MiscPage, "Anti-Mod", "AntiMod", false, toggleAntiMod)
+    createToggleRow(MiscPage, "Anti-AFK", "AntiAFK", false, toggleAntiAFK)
+    createToggleRow(MiscPage, "FPS Boost", "FPSBoost", false, toggleFPSBoost)
+
+    createActionButton(SettingsPage, "Save Current Settings Parameters", function()
+        saveSettings()
+    end)
+    createKeybindSelector(SettingsPage, "Menu Keybind", "ToggleKey")
+
+    for key, _ in pairs(RegisteredUIComponents) do
+        updateUIToggleVisual(key, false)
+    end
+
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.UserInputType == Enum.UserInputType.Keyboard then
+            if input.KeyCode == Settings.ToggleKey then
+                MainFrame.Visible = not MainFrame.Visible
+            end
+        end
+    end)
+
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        character = char 
+        hrp = char:WaitForChild("HumanoidRootPart")
+        if FeatureStates.OrbitAura then toggleOrbitAura(false) task.wait(0.1) toggleOrbitAura(true) end
+        if FeatureStates.SmoothOrbit then toggleSmoothOrbit(false) task.wait(0.1) toggleSmoothOrbit(true) end
+        if FeatureStates.AutoRespawn then setupRespawn(char) end
+    end)
+
+    if FeatureStates.OrbitAura then toggleOrbitAura(true) end
+    if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
+    if FeatureStates.AutoCollect then toggleAutoCollect(true) end
+    if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
+    if FeatureStates.AntiMod then toggleAntiMod(true) end
+    if FeatureStates.AntiAFK then toggleAntiAFK(true) end
+    if FeatureStates.FPSBoost then toggleFPSBoost(true) end
+end
+
+--------------------------------------------------
+-- INITIALIZATION SEQUENCE 
+--------------------------------------------------
+task.spawn(function()
+    -- Staggers the initialization thread to completely avoid script startup lag
+    task.wait(5)
+
+    local overlayGui = gethui() or game:GetService("CoreGui")
+    local watermarkGui = Instance.new("ScreenGui")
+    watermarkGui.Name = "JuggWatermark"
+    watermarkGui.DisplayOrder = 2147483647
+    watermarkGui.Parent = overlayGui
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(0, 750, 0, 260) 
+    container.Position = UDim2.new(0.5, 0, 0.5, -25)
+    container.AnchorPoint = Vector2.new(0.5, 0.5)
+    container.BackgroundTransparency = 1
+    container.Parent = watermarkGui
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 0, 190) 
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = "<i>jugg</i>"
+    textLabel.RichText = true
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.ArialBold
+    textLabel.TextTransparency = 1
+    textLabel.Parent = container
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(15, 15, 20)
+    stroke.Thickness = 14
+    stroke.Transparency = 1
+    stroke.Parent = textLabel
+
+    local subtitleLabel = Instance.new("TextLabel")
+    subtitleLabel.Size = UDim2.new(1, 0, 0, 35)
+    subtitleLabel.Position = UDim2.new(0, 0, 0, 195) 
+    subtitleLabel.BackgroundTransparency = 1
+    subtitleLabel.Text = "<i>the best lua</i>"
+    subtitleLabel.RichText = true 
+    subtitleLabel.TextColor3 = Color3.fromRGB(140, 20, 255)
+    subtitleLabel.TextSize = 24
+    subtitleLabel.Font = Enum.Font.GothamBold
+    subtitleLabel.TextTransparency = 1
+    subtitleLabel.Parent = container
+
+    local subtitleStroke = Instance.new("UIStroke")
+    subtitleStroke.Color = Color3.fromRGB(10, 10, 10)
+    subtitleStroke.Thickness = 3
+    subtitleStroke.Transparency = 1
+    subtitleStroke.Parent = subtitleLabel
+
+    local uiGradient = Instance.new("UIGradient")
+    uiGradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 0, 50)),
         ColorSequenceKeypoint.new(0.2,  Color3.fromRGB(255, 140, 0)),
         ColorSequenceKeypoint.new(0.4,  Color3.fromRGB(0, 255, 100)),
@@ -87,500 +697,37 @@ task.spawn(function()
         ColorSequenceKeypoint.new(0.8,  Color3.fromRGB(150, 0, 255)),
         ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 0, 50))
     })
-    UIGradient.Parent = TextLabel
+    uiGradient.Parent = textLabel
 
-    -- Flowing animation logic
     local waveSpeed = 1.3
     local animationLoop = RunService.RenderStepped:Connect(function()
         local offset = (tick() * waveSpeed) % 1
-        UIGradient.Offset = Vector2.new(-offset, 0)
+        uiGradient.Offset = Vector2.new(-offset, 0)
     end)
 
-    -- Fade In everything
-    TS:Create(TextLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-    TS:Create(Stroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
-    TS:Create(SubtitleLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-    TS:Create(SubtitleStroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
+    -- Fade Intro In
+    TweenService:Create(textLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
+    TweenService:Create(stroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
+    TweenService:Create(subtitleLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
+    TweenService:Create(subtitleStroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
     
+    -- Display time
     task.wait(3.5)
 
-    -- Smooth Downward Slide + Fade Out Transition
+    -- Slide out sequence
     local slideTime = 0.55
     local slideTweenInfo = TweenInfo.new(slideTime, Enum.EasingStyle.Back, Enum.EasingDirection.In)
     
-    TS:Create(Container, slideTweenInfo, {Position = UDim2.new(0.5, 0, 0.5, 180)}):Play()
-    TS:Create(TextLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
-    TS:Create(Stroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
-    TS:Create(SubtitleLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
-    TS:Create(SubtitleStroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
+    TweenService:Create(container, slideTweenInfo, {Position = UDim2.new(0.5, 0, 0.5, 180)}):Play()
+    TweenService:Create(textLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
+    TweenService:Create(stroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
+    TweenService:Create(subtitleLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
+    TweenService:Create(subtitleStroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
     
     task.wait(slideTime)
     animationLoop:Disconnect()
+    watermarkGui:Destroy()
     
+    -- Sequential handover: Generate dashboard now that intro has closed
+    InitializeMainMenu()
 end)
--- =========================================================================
-
-    if autoload == nil then autoload=true end
-    if autoleave == nil then autoleave=false end
-
-    local players = cloneref(game:GetService("Players"))
-    local coregui = gethui() or cloneref(game:GetService("CoreGui"))
-    local TS = game:GetService("TweenService")
-    local TI = TweenInfo.new
-    local http = game:GetService("HttpService")
-    local lp = players.LocalPlayer
-    local groupId = game.CreatorId
-    local notify_sound = nil
-    local CACHE_FILE = "jugglua/modDetect_" .. groupId .. ".json"
-
-    if game.CreatorType ~= Enum.CreatorType.Group then
-        return
-    end
-
-    task.spawn(function()
-        if not isfile("jugglua/modDetect.mp3") then writefile("jugglua/modDetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
-        notify_sound = Instance.new("Sound", workspace)
-        notify_sound.SoundId = getcustomasset("jugglua/modDetect.mp3")
-        notify_sound.Volume = 3
-        notify_sound.Looped = true
-    end)
-
-    pcall(function()
-        if not autoload then return end
-        if autoleave then
-            queue_on_teleport([[
-                pcall(function()
-                    autoload = true;
-                    autoleave = true;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("csgofever", "Modules")
-                    loadstring(Repo:getFileContent("mod.lua"))()
-                end)
-            ]])
-        else
-            queue_on_teleport([[
-                pcall(function()
-                    autoload = true;
-                    autoleave = false;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("csgofever", "Modules")
-                    loadstring(Repo:getFileContent("mod.lua"))()
-                end)
-            ]])
-        end
-    end)
-
-    local function fetchURL(url)
-        local ok, res = pcall(game.HttpGet, game, url)
-        if ok then
-            local data = http:JSONDecode(res)
-            return data
-        end
-        return nil
-    end
-
-    local function loadCachedStaffIds()
-        local cached = {}
-        pcall(function()
-            if isfile(CACHE_FILE) then
-                local data = http:JSONDecode(readfile(CACHE_FILE))
-                if type(data) == "table" then
-                    for _, uid in ipairs(data) do
-                        cached[uid] = true
-                    end
-                end
-            end
-        end)
-        return cached
-    end
-
-    local function saveCachedStaffIds(ids)
-        pcall(function()
-            local list = {}
-            for uid, _ in pairs(ids) do
-                table.insert(list, uid)
-            end
-            writefile(CACHE_FILE, http:JSONEncode(list))
-        end)
-    end
-
-    local function extractStaffRoleIds(groupId)
-        local url = ("https://groups.roblox.com/v1/groups/%d/roles"):format(groupId)
-        local data = fetchURL(url)
-        local roleIds = {}
-
-        if data and data.roles then
-            for _, r in ipairs(data.roles) do
-                local name = string.lower(r.name)
-                if string.find(name, "mod") or string.find(name, "staff") or string.find(name, "contributor") 
-                or string.find(name, "script") or string.find(name, "build") then
-                    table.insert(roleIds, r.id)
-                end
-            end
-        end
-
-        return roleIds
-    end
-
-    local function fetchUsersInRole(groupId, roleId)
-        local cursor = ""
-        local collected = {}
-
-        while true do
-            local url = string.format("https://groups.roproxy.com/v1/groups/%d/roles/%d/users?limit=100&cursor=%s", groupId, roleId, cursor)
-
-            local success, response = pcall(function()
-                return game:HttpGet(url)
-            end)
-
-            if not success or not response then break end
-            local json = http:JSONDecode(response)
-
-            if json.data and type(json.data) == "table" then
-                for _, user in ipairs(json.data) do
-                    if user.userId then
-                        collected[user.userId] = true
-                    end
-                end
-            end
-
-            if not json.nextPageCursor or json.nextPageCursor == "" then break end
-            cursor = json.nextPageCursor
-        end
-
-        return collected
-    end
-
-
-    local staffRoleIds = extractStaffRoleIds(groupId)
-    local staffUserIds = loadCachedStaffIds()
-
-    local function GetRole(plr, groupId)
-        if plr and typeof(plr) == "Instance" then
-            local method = plr.GetRoleInGroup
-            if typeof(method) == "function" then
-                return method(plr, groupId)
-            end
-        end
-        return nil
-    end
-
-    local function isStaffRoleName(role)
-        if role and typeof(role) == "string" then
-            local r = string.lower(role)
-            if string.find(r, "mod") or string.find(r, "staff") or string.find(r, "contributor") or string.find(r, "script") or string.find(r, "build") then
-                return true
-            end
-        end
-        return false
-    end
-
-    local function shortenName(name)
-        if #name > 6 then
-            return string.sub(name, 1, 6) .. "..."
-        end
-        return name
-    end
-
-    local function getStaffInfo()
-        local total = #players:GetPlayers()
-        local staffNames = {}
-        for _, plr in ipairs(players:GetPlayers()) do
-            local role = GetRole(plr, game.CreatorId)
-            if isStaffRoleName(role) then
-                table.insert(staffNames, shortenName(plr.Name))
-            end
-        end
-        return staffNames, total
-    end
-
-    local function getFriendStaffInfo()
-        local list = {}
-        for _, plr in ipairs(players:GetPlayers()) do
-            -- Throttling delay added here to prevent reaching API requests ceiling limits (HTTP 429)
-            task.wait(0.4)
-            
-            local ok, pages = pcall(function()
-                return players:GetFriendsAsync(plr.UserId)
-            end)
-            
-            if ok and pages then
-                local loopSuccess = pcall(function()
-                    while true do
-                        local page = pages:GetCurrentPage()
-                        for _, friend in ipairs(page) do
-                            if staffUserIds[friend.Id] then
-                                table.insert(list, shortenName(friend.Username))
-                            end
-                        end
-                        if pages.IsFinished then break end
-                        task.wait(0.1) -- Small breathing room before turning the friend pagination index
-                        pages:AdvanceToNextPageAsync()
-                    end
-                end)
-                if not loopSuccess then continue end
-            end
-        end
-        return list
-    end
-
-    local function createLeaveUI(MessageText, OnYes, OnNo)
-        local old = coregui:FindFirstChild("ModAlertLeaveUI")
-        if old then return end
-
-        local Gui = Instance.new("ScreenGui")
-        Gui.Name = "ModAlertLeaveUI"
-        Gui.ResetOnSpawn = false
-        Gui.IgnoreGuiInset = true
-        Gui.DisplayOrder = 2147483647
-        Gui.Parent = coregui
-
-        local Backdrop = Instance.new("Frame")
-        Backdrop.Size = UDim2.new(1, 0, 1, 0)
-        Backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        Backdrop.BackgroundTransparency = 1
-        Backdrop.BorderSizePixel = 0
-        Backdrop.Parent = Gui
-
-        local Container = Instance.new("CanvasGroup")
-        Container.Size = UDim2.new(0, 380, 0, 0)
-        Container.AutomaticSize = Enum.AutomaticSize.Y
-        Container.Position = UDim2.new(0.5, 0, 0.5, 0)
-        Container.AnchorPoint = Vector2.new(0.5, 0.5)
-        Container.BackgroundColor3 = Color3.fromRGB(18, 18, 20)
-        Container.BorderSizePixel = 0
-        Container.GroupTransparency = 1
-        Container.Parent = Gui
-
-        Instance.new("UICorner", Container).CornerRadius = UDim.new(0, 12)
-
-        local Border = Instance.new("UIStroke")
-        Border.Color = Color3.fromRGB(45, 45, 50)
-        Border.Thickness = 1
-        Border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        Border.Parent = Container
-
-        local Padding = Instance.new("UIPadding")
-        Padding.PaddingTop = UDim.new(0, 24)
-        Padding.PaddingBottom = UDim.new(0, 20)
-        Padding.PaddingLeft = UDim.new(0, 24)
-        Padding.PaddingRight = UDim.new(0, 24)
-        Padding.Parent = Container
-
-        local Layout = Instance.new("UIListLayout")
-        Layout.FillDirection = Enum.FillDirection.Vertical
-        Layout.SortOrder = Enum.SortOrder.LayoutOrder
-        Layout.Padding = UDim.new(0, 14)
-        Layout.Parent = Container
-
-        local Header = Instance.new("Frame")
-        Header.Size = UDim2.new(1, 0, 0, 32)
-        Header.BackgroundTransparency = 1
-        Header.LayoutOrder = 1
-        Header.Parent = Container
-
-        local HeaderLayout = Instance.new("UIListLayout")
-        HeaderLayout.FillDirection = Enum.FillDirection.Horizontal
-        HeaderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-        HeaderLayout.Padding = UDim.new(0, 10)
-        HeaderLayout.Parent = Header
-
-        local IconFrame = Instance.new("Frame")
-        IconFrame.Size = UDim2.new(0, 32, 0, 32)
-        IconFrame.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-        IconFrame.BorderSizePixel = 0
-        IconFrame.Parent = Header
-
-        Instance.new("UICorner", IconFrame).CornerRadius = UDim.new(0, 8)
-
-        local IconImage = Instance.new("ImageLabel")
-        IconImage.Size = UDim2.new(0.6, 0, 0.6, 0)
-        IconImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-        IconImage.AnchorPoint = Vector2.new(0.5, 0.5)
-        IconImage.BackgroundTransparency = 1
-        IconImage.Image = "rbxassetid://18797417802"
-        IconImage.ImageColor3 = Color3.new(1, 1, 1)
-        IconImage.Parent = IconFrame
-
-        local Title = Instance.new("TextLabel")
-        Title.Size = UDim2.new(1, -42, 1, 0)
-        Title.BackgroundTransparency = 1
-        Title.Text = "Moderator Detected"
-        Title.TextColor3 = Color3.fromRGB(240, 240, 240)
-        Title.TextSize = 17
-        Title.Font = Enum.Font.GothamBold
-        Title.TextXAlignment = Enum.TextXAlignment.Left
-        Title.Parent = Header
-
-        local Divider = Instance.new("Frame")
-        Divider.Size = UDim2.new(1, 0, 0, 1)
-        Divider.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-        Divider.BorderSizePixel = 0
-        Divider.LayoutOrder = 2
-        Divider.Parent = Container
-
-        local Message = Instance.new("TextLabel")
-        Message.Size = UDim2.new(1, 0, 0, 0)
-        Message.AutomaticSize = Enum.AutomaticSize.Y
-        Message.BackgroundTransparency = 1
-        Message.Text = MessageText
-        Message.RichText = true
-        Message.TextColor3 = Color3.fromRGB(160, 160, 170)
-        Message.TextSize = 14
-        Message.Font = Enum.Font.Gotham
-        Message.TextWrapped = true
-        Message.TextXAlignment = Enum.TextXAlignment.Left
-        Message.TextYAlignment = Enum.TextYAlignment.Top
-        Message.LayoutOrder = 3
-        Message.Parent = Container
-
-        local ButtonsFrame = Instance.new("Frame")
-        ButtonsFrame.Size = UDim2.new(1, 0, 0, 42)
-        ButtonsFrame.BackgroundTransparency = 1
-        ButtonsFrame.LayoutOrder = 4
-        ButtonsFrame.Parent = Container
-
-        local ButtonLayout = Instance.new("UIListLayout")
-        ButtonLayout.FillDirection = Enum.FillDirection.Horizontal
-        ButtonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-        ButtonLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-        ButtonLayout.Padding = UDim.new(0, 10)
-        ButtonLayout.Parent = ButtonsFrame
-
-        local function CreateButton(Text, BgColor, TextColor)
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(0, 130, 0, 38)
-            Btn.BackgroundColor3 = BgColor
-            Btn.BorderSizePixel = 0
-            Btn.Text = Text
-            Btn.TextColor3 = TextColor
-            Btn.TextSize = 14
-            Btn.Font = Enum.Font.GothamSemibold
-            Btn.Modal = true
-            Btn.AutoButtonColor = false
-            Btn.Parent = ButtonsFrame
-
-            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
-
-            Btn.MouseEnter:Connect(function()
-                TS:Create(Btn, TI(0.15), {
-                    BackgroundColor3 = Color3.fromRGB(
-                        math.min(BgColor.R * 255 + 12, 255),
-                        math.min(BgColor.G * 255 + 12, 255),
-                        math.min(BgColor.B * 255 + 12, 255)
-                    )
-                }):Play()
-            end)
-
-            Btn.MouseLeave:Connect(function()
-                TS:Create(Btn, TI(0.15), { BackgroundColor3 = BgColor }):Play()
-            end)
-
-            return Btn
-        end
-
-        local NoBtn  = CreateButton("Stay Here",    Color3.fromRGB(38, 38, 42),  Color3.fromRGB(180, 180, 190))
-        local YesBtn = CreateButton("Leave Server", Color3.fromRGB(185, 50, 50), Color3.fromRGB(255, 255, 255))
-
-        local NoBorder = Instance.new("UIStroke")
-        NoBorder.Color = Color3.fromRGB(55, 55, 62)
-        NoBorder.Thickness = 1
-        NoBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        NoBorder.Parent = NoBtn
-
-        local function FadeOut(callback)
-            TS:Create(Backdrop, TI(0.25), { BackgroundTransparency = 1 }):Play()
-            TS:Create(Container, TI(0.25), { GroupTransparency = 1 }):Play()
-            task.wait(0.25)
-            if callback then callback() end
-            Gui:Destroy()
-        end
-
-        YesBtn.MouseButton1Click:Connect(function() FadeOut(OnYes) end)
-        NoBtn.MouseButton1Click:Connect(function()
-            if notify_sound then notify_sound:Stop() end
-            FadeOut(OnNo)
-        end)
-
-        TS:Create(Backdrop, TI(0.3), { BackgroundTransparency = 0.55 }):Play()
-        TS:Create(Container, TI(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            GroupTransparency = 0
-        }):Play()
-
-        return Gui
-    end
-
-    local function showNotification(name, statusText, statusColor, staffNames, friendStaffNames, totalCount, duration)
-        local staffDisplay = #staffNames > 0 and table.concat(staffNames, ", ") or "None"
-        local friendDisplay = #friendStaffNames > 0 and table.concat(friendStaffNames, ", ") or "None"
-
-        -- Strip out backslashes and line breaks from status for a seamless line print
-        local cleanStatus = string.gsub(statusText, "\n", " | ")
-
-        -- CLEAN PRINT DIRECTLY TO OUTPUT WINDOW
-        print("========================================")
-        print("[MODERATOR DETECTOR STATUS]")
-        print("Status: " .. tostring(cleanStatus))
-        print("Server Moderators: " .. tostring(staffDisplay))
-        print("Friend Moderators: " .. tostring(friendDisplay))
-        print("-- jugg.lua --")
-        print("========================================")
-    end
-
-    local function runDetection()
-        local staffNames, totalCount = getStaffInfo()
-        local friendStaffNames = getFriendStaffInfo()
-
-        local hasServerStaff = #staffNames > 0
-        local hasFriendStaff = #friendStaffNames > 0
-        local hasDetected = (hasServerStaff or hasFriendStaff)
-
-        local statusText = ""
-        if hasServerStaff then statusText = "Moderators detected!" end
-        if hasFriendStaff then statusText = statusText .. (hasServerStaff and "\n" or "") .. "Staff friends detected!" end
-        if statusText == "" then statusText = "No staff detected." end
-
-        local statusColor = hasDetected and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(255, 255, 255)
-        local duration = hasDetected and 60 or 10
-
-        if hasDetected then
-            if autoleave then
-                lp:Kick('Leaved!')
-                return true
-            end
-            task.spawn(function()
-                if notify_sound then notify_sound:Play() end
-            end)
-            createLeaveUI([[There is a <font color="#FF8888">moderator</font> in this server.<br/>Do you want to leave?]], function()
-                game:GetService("TeleportService"):Teleport(17625359962)
-            end, nil)
-        end
-
-        showNotification("ModAlertNotification", statusText, statusColor, staffNames, friendStaffNames, totalCount, duration)
-        return hasDetected
-    end
-    runDetection()
-
-    task.spawn(function()
-        for _, roleId in ipairs(staffRoleIds) do
-            local users = fetchUsersInRole(groupId, roleId)
-            for uid, _ in pairs(users) do
-                staffUserIds[uid] = true
-            end
-        end
-        saveCachedStaffIds(staffUserIds)
-        if not coregui:FindFirstChild("ModAlertLeaveUI") then
-            runDetection()
-        end
-    end)
-
-    players.PlayerAdded:Connect(function(plr)
-        plr.CharacterAdded:Wait()
-        local role = GetRole(plr, game.CreatorId)
-        if isStaffRoleName(role) then
-            if not coregui:FindFirstChild("ModAlertLeaveUI") then
-                runDetection()
-            end
-        end
-    end)
-end, function() end)
