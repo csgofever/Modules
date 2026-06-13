@@ -19,11 +19,8 @@ xpcall(function()
 -- Jugg Rivals Logo Overlay (Instant Execution Mode)
 -- =========================================================================
 task.spawn(function()
-    -- REMOVED: repeat task.wait() until game:IsLoaded() 
-    -- This forces the UI to build instantly upon injection, covering the load screen!
-
     -- Staggers the thread to prevent startup lag spikes
-    task.wait(2)
+    task.wait(4)
 
     local coregui = gethui() or game:GetService("CoreGui")
     local TS = game:GetService("TweenService")
@@ -119,7 +116,7 @@ task.spawn(function()
     
     task.wait(slideTime)
     animationLoop:Disconnect()
-    WatermarkGui:Destroy()
+    
 end)
 -- =========================================================================
 
@@ -258,24 +255,6 @@ end)
     local staffRoleIds = extractStaffRoleIds(groupId)
     local staffUserIds = loadCachedStaffIds()
 
-    --[[
-    local function GetUserRoleInGroup(userId, groupId)
-        local url = string.format("https://groups.roproxy.com/v2/users/%d/groups/roles", userId)
-        local success, response = pcall(game.HttpGet, game, url)
-        if success then
-            local data = http:JSONDecode(response)
-            if data and data.data then
-                for _, info in ipairs(data.data) do
-                    if info.group and info.group.id == groupId then
-                        return info.role and info.role.name or nil
-                    end
-                end
-            end
-        end
-        return nil
-    end
-    ]]
-
     local function GetRole(plr, groupId)
         if plr and typeof(plr) == "Instance" then
             local method = plr.GetRoleInGroup
@@ -318,20 +297,28 @@ end)
     local function getFriendStaffInfo()
         local list = {}
         for _, plr in ipairs(players:GetPlayers()) do
+            -- Throttling delay added here to prevent reaching API requests ceiling limits (HTTP 429)
+            task.wait(0.4)
+            
             local ok, pages = pcall(function()
                 return players:GetFriendsAsync(plr.UserId)
             end)
+            
             if ok and pages then
-                while true do
-                    local page = pages:GetCurrentPage()
-                    for _, friend in ipairs(page) do
-                        if staffUserIds[friend.Id] then
-                            table.insert(list, shortenName(friend.Username))
+                local loopSuccess = pcall(function()
+                    while true do
+                        local page = pages:GetCurrentPage()
+                        for _, friend in ipairs(page) do
+                            if staffUserIds[friend.Id] then
+                                table.insert(list, shortenName(friend.Username))
+                            end
                         end
+                        if pages.IsFinished then break end
+                        task.wait(0.1) -- Small breathing room before turning the friend pagination index
+                        pages:AdvanceToNextPageAsync()
                     end
-                    if pages.IsFinished then break end
-                    pages:AdvanceToNextPageAsync()
-                end
+                end)
+                if not loopSuccess then continue end
             end
         end
         return list
@@ -501,8 +488,6 @@ end)
         NoBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
         NoBorder.Parent = NoBtn
 
-        
-
         local function FadeOut(callback)
             TS:Create(Backdrop, TI(0.25), { BackgroundTransparency = 1 }):Play()
             TS:Create(Container, TI(0.25), { GroupTransparency = 1 }):Play()
@@ -526,97 +511,20 @@ end)
     end
 
     local function showNotification(name, statusText, statusColor, staffNames, friendStaffNames, totalCount, duration)
-        local old = coregui:FindFirstChild("ModAlertNotification")
-        if old then old:Destroy() end
-
-        local screengui = Instance.new("ScreenGui")
-        screengui.Name = name
-        screengui.ResetOnSpawn = false
-        screengui.DisplayOrder = 2147483647
-        screengui.IgnoreGuiInset = true
-        screengui.Parent = coregui
-
-        local canvas = Instance.new("CanvasGroup")
-        canvas.AnchorPoint = Vector2.new(1, 1)
-        canvas.Position = UDim2.new(1, -20, 1, -20)
-        canvas.Size = UDim2.new(0, 280, 0, 0)
-        canvas.AutomaticSize = Enum.AutomaticSize.Y
-        canvas.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        canvas.BorderSizePixel = 0
-        canvas.BackgroundTransparency = 0.15
-        canvas.Parent = screengui
-
-        local uicorner = Instance.new("UICorner")
-        uicorner.CornerRadius = UDim.new(0, 10)
-        uicorner.Parent = canvas
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 1
-        stroke.Color = Color3.fromRGB(90, 90, 90)
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Parent = canvas
-
-        local listLayout = Instance.new("UIListLayout")
-        listLayout.FillDirection = Enum.FillDirection.Vertical
-        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        listLayout.Padding = UDim.new(0, 4)
-        listLayout.Parent = canvas
-
-        local padding = Instance.new("UIPadding")
-        padding.PaddingTop = UDim.new(0, 10)
-        padding.PaddingBottom = UDim.new(0, 12)
-        padding.PaddingLeft = UDim.new(0, 15)
-        padding.PaddingRight = UDim.new(0, 15)
-        padding.Parent = canvas
-
-        local title = Instance.new("TextLabel")
-        title.Text = "Moderator Detector"
-        title.Font = Enum.Font.GothamBold
-        title.TextSize = 18
-        title.TextColor3 = Color3.fromRGB(236, 236, 236)
-        title.BackgroundTransparency = 1
-        title.Size = UDim2.new(1, 0, 0, 24)
-        title.TextXAlignment = Enum.TextXAlignment.Left
-        title.LayoutOrder = 1
-        title.Parent = canvas
-
         local staffDisplay = #staffNames > 0 and table.concat(staffNames, ", ") or "None"
         local friendDisplay = #friendStaffNames > 0 and table.concat(friendStaffNames, ", ") or "None"
 
-        local desc = Instance.new("TextLabel")
-        desc.Text = statusText .. "\n<font color=\"rgb(150,150,150)\" size=\"13\">Server Moderators: " .. staffDisplay .. "</font>" .. "\n<font color=\"rgb(150,150,150)\" size=\"13\">Friend Moderators: " .. friendDisplay .. "</font>"
-        desc.RichText = true
-        desc.Font = Enum.Font.Gotham
-        desc.TextSize = 14
-        desc.TextColor3 = statusColor
-        desc.BackgroundTransparency = 1
-        desc.Size = UDim2.new(1, 0, 0, 0)
-        desc.AutomaticSize = Enum.AutomaticSize.Y 
-        desc.TextWrapped = true
-        desc.TextXAlignment = Enum.TextXAlignment.Left
-        desc.TextYAlignment = Enum.TextYAlignment.Top
-        desc.LayoutOrder = 2
-        desc.Parent = canvas
+        -- Strip out backslashes and line breaks from status for a seamless line print
+        local cleanStatus = string.gsub(statusText, "\n", " | ")
 
-        -- Add Zion watermark to the notification box
-        local NotifWatermark = Instance.new("TextLabel")
-        NotifWatermark.Size = UDim2.new(1, 0, 0, 12)
-        NotifWatermark.BackgroundTransparency = 1
-        NotifWatermark.Text = "Made by Zion"
-        NotifWatermark.TextColor3 = Color3.fromRGB(110, 110, 115)
-        NotifWatermark.TextSize = 10
-        NotifWatermark.Font = Enum.Font.GothamItalic
-        NotifWatermark.TextXAlignment = Enum.TextXAlignment.Right
-        NotifWatermark.LayoutOrder = 3 -- Places it under the staff text
-        NotifWatermark.Parent = canvas
-
-        task.delay(duration, function()
-            pcall(function()
-                if screengui then
-                    screengui:Destroy()
-                end
-            end)
-        end)
+        -- CLEAN PRINT DIRECTLY TO OUTPUT WINDOW
+        print("========================================")
+        print("[MODERATOR DETECTOR STATUS]")
+        print("Status: " .. tostring(cleanStatus))
+        print("Server Moderators: " .. tostring(staffDisplay))
+        print("Friend Moderators: " .. tostring(friendDisplay))
+        print("-- jugg.lua --")
+        print("========================================")
     end
 
     local function runDetection()
@@ -627,7 +535,6 @@ end)
         local hasFriendStaff = #friendStaffNames > 0
         local hasDetected = (hasServerStaff or hasFriendStaff)
 
-        
         local statusText = ""
         if hasServerStaff then statusText = "Moderators detected!" end
         if hasFriendStaff then statusText = statusText .. (hasServerStaff and "\n" or "") .. "Staff friends detected!" end
