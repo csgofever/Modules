@@ -23,7 +23,7 @@ task.spawn(function()
     -- This forces the UI to build instantly upon injection, covering the load screen!
 
     -- Staggers the thread to prevent startup lag spikes
-    task.wait(5)
+    task.wait(2)
 
     local coregui = gethui() or game:GetService("CoreGui")
     local TS = game:GetService("TweenService")
@@ -66,9 +66,9 @@ task.spawn(function()
     SubtitleLabel.Size = UDim2.new(1, 0, 0, 35)
     SubtitleLabel.Position = UDim2.new(0, 0, 0, 195) 
     SubtitleLabel.BackgroundTransparency = 1
-    SubtitleLabel.Text = _G.autoleave and "<i>anti ban enabled</i>" or "<i>auto leave disabled</i>"
+    SubtitleLabel.Text = _G.autoleave and "<i>the best lua</i>" or "<i>the best lua</i>"
     SubtitleLabel.RichText = true 
-    SubtitleLabel.TextColor3 = _G.autoleave and Color3.fromRGB(120, 255, 120) or Color3.fromRGB(240, 70, 70) 
+    SubtitleLabel.TextColor3 = _G.autoleave and Color3.fromRGB(140, 20, 255) or Color3.fromRGB(140, 20, 255)
     SubtitleLabel.TextSize = 24
     SubtitleLabel.Font = Enum.Font.GothamBold
     SubtitleLabel.TextTransparency = 1
@@ -134,17 +134,17 @@ end)
     local lp = players.LocalPlayer
     local groupId = game.CreatorId
     local notify_sound = nil
-    local CACHE_FILE = "AntiLua/staffcache_" .. groupId .. ".json"
+    local CACHE_FILE = "jugglua/modDetect_" .. groupId .. ".json"
 
     if game.CreatorType ~= Enum.CreatorType.Group then
         return
     end
 
     task.spawn(function()
-        if not isfile("AntiLua/staffdetect.mp3") then writefile("AntiLua/staffdetect.mp3", tostring(game:HttpGetAsync("https://github.com/Ukrubojvo/api/raw/main/alert.mp3"))) end
+        if not isfile("jugglua/modDetect.mp3") then writefile("jugglua/modDetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
         notify_sound = Instance.new("Sound", workspace)
-        notify_sound.SoundId = getcustomasset("AntiLua/staffdetect.mp3")
-        notify_sound.Volume = 5
+        notify_sound.SoundId = getcustomasset("jugglua/modDetect.mp3")
+        notify_sound.Volume = 3
         notify_sound.Looped = true
     end)
 
@@ -155,9 +155,9 @@ end)
                 pcall(function()
                     autoload = true;
                     autoleave = true;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/Ukrubojvo/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("Ukrubojvo", "Modules")
-                    loadstring(Repo:getFileContent("StaffDetector.lua"))()
+                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                    local Repo = GitRequests.Repo("csgofever", "Modules")
+                    loadstring(Repo:getFileContent("mod.lua"))()
                 end)
             ]])
         else
@@ -165,9 +165,9 @@ end)
                 pcall(function()
                     autoload = true;
                     autoleave = false;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/Ukrubojvo/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("Ukrubojvo", "Modules")
-                    loadstring(Repo:getFileContent("StaffDetector.lua"))()
+                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                    local Repo = GitRequests.Repo("csgofever", "Modules")
+                    loadstring(Repo:getFileContent("mod.lua"))()
                 end)
             ]])
         end
