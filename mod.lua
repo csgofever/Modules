@@ -19,6 +19,9 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
+local trip_hrp
+local rs = game:GetService("RunService")
+local trip_conn_a, trip_conn_b
 
 -- CLEAR COMPONENT: Wipes out previous menus to stop duplicate rendering
 local targetGui = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
@@ -44,15 +47,18 @@ local Settings = {
     AutoExecute = true, -- AutoExecute default setting state copied from mod.lua logic
 }
 
+
 local FeatureStates = {
     OrbitAura = false,
     SmoothOrbit = false,
+    AntiTrip = false,
     AutoCollect = false,
     AutoRespawn = false,
     AntiMod = false,
     AntiAFK = false,
     FPSBoost = false,
 }
+
 
 local function saveSettings()
     if makefolder and isfolder and not isfolder(FOLDER_NAME) then
@@ -330,6 +336,54 @@ local function toggleSmoothOrbit(enabled)
     end
 end
 
+local function gethrp()
+    pcall(function()
+        local pl = game:GetService("Players").LocalPlayer
+        trip_hrp = pl and pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+    end)
+end
+
+local function det()
+    pcall(function()
+        if not trip_hrp then return end
+        for _, s in ipairs(workspace:GetChildren()) do
+            if s.Name == "SubspaceTripmineHitbox" then
+                local hb = s:FindFirstChild("Hitbox")
+                if hb and trip_hrp and trip_hrp:IsA("BasePart") then
+                    firetouchinterest(trip_hrp, hb, 1)
+                    firetouchinterest(trip_hrp, hb, 0)
+                end
+            end
+        end
+    end)
+end
+
+local function startAntiSubspace()
+    -- Only connect if they aren't already connected
+    if not trip_conn_a then
+        trip_conn_a = game:GetService("RunService").Heartbeat:Connect(gethrp)
+        trip_conn_b = game:GetService("RunService").Heartbeat:Connect(det)
+        --print("Anti-Subspace Loop STARTED")
+    end
+end
+
+local function stopAntiSubspace()
+    -- Disconnect the loops to stop the detection
+    if trip_conn_a then trip_conn_a:Disconnect(); trip_conn_a = nil end
+    if trip_conn_b then trip_conn_b:Disconnect(); trip_conn_b = nil end
+    --print("Anti-Subspace Loop STOPPED")
+end
+
+
+local function toggleAntiTrip(enabled)
+    FeatureStates.AntiTrip = enabled
+    if enabled then
+        startAntiSubspace()
+    else
+        stopAntiSubspace()
+    end
+end
+
 local function toggleAutoCollect(enabled)
     FeatureStates.AutoCollect = enabled
     if enabled then
@@ -346,6 +400,8 @@ local function toggleAutoCollect(enabled)
         if collectConnection then collectConnection:Disconnect() collectConnection = nil end
     end
 end
+
+
 
 local function setupRespawn(char)
     local humanoid = char:WaitForChild("Humanoid")
@@ -673,6 +729,7 @@ local function InitializeMainMenu()
         end)
     end
 
+
     local JuggPage = createTab("Jugg")
     local MiscPage = createTab("Misc")
     local SettingsPage = createTab("Settings")
@@ -683,6 +740,7 @@ local function InitializeMainMenu()
 
     createToggleRow(JuggPage, "Orbit Kill Aura", "OrbitAura", false, toggleOrbitAura)
     createToggleRow(JuggPage, "Smooth Orbit", "SmoothOrbit", false, toggleSmoothOrbit)
+    createToggleRow(JuggPage, "Anti Subspace Tripmine", "AntiTrip", false, toggleAntiTrip)
     createToggleRow(JuggPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
     createToggleRow(JuggPage, "Auto Respawn", "AutoRespawn", false, toggleAutoRespawn)
 
@@ -728,7 +786,8 @@ local function InitializeMainMenu()
     if Settings.AutoExecute then setupAutoExecute() end
     if FeatureStates.OrbitAura then toggleOrbitAura(true) end
     if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
-    if FeatureStates.AutoCollect then toggleAutoCollect(true) end
+    if FeatureStates.AntiTrip then toggleAutoCollect(true) end
+    if FeatureStates.AutoCollect then toggleAntiTrip(true) end
     if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
     if FeatureStates.AntiMod then toggleAntiMod(true) end
     if FeatureStates.AntiAFK then toggleAntiAFK(true) end
