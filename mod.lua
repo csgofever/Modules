@@ -191,9 +191,8 @@ local function setupAutoExecute()
         if not Settings.AutoExecute then return end
         if queue_on_teleport then
             queue_on_teleport([[
+                task.wait(3)
                 pcall(function()
-                    autoload = true;
-                    autoleave = true;
                     local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
                     local Repo = GitRequests.Repo("csgofever", "Modules")
                     loadstring(Repo:getFileContent("mod.lua"))()
