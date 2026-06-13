@@ -500,6 +500,20 @@ local function InitializeMainMenu()
     LogoLabel.TextXAlignment = Enum.TextXAlignment.Left
     LogoLabel.Parent = DragHandle
 
+
+    --juggdesigner at bottom left
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "WatermarkText"
+    textLabel.Size = UDim2.new(0, 150, 0, 30)
+    textLabel.Position = UDim2.new(0, 10, 1, -40) -- Bottom left with 10px padding
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = "juggdesigner"
+    textLabel.TextColor3 = Color3.fromRGB(128, 0, 128) -- Purple
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 14
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.Parent = watermarkGui
+
     makeDraggable(MainFrame, MainFrame)
     makeDraggable(MainFrame, DragHandle)
 
