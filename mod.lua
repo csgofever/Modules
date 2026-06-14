@@ -1073,19 +1073,18 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
         if FeatureStates.SmoothOrbit then toggleSmoothOrbit(false) task.wait(0.1) toggleSmoothOrbit(true) end
         if FeatureStates.AutoRespawn then setupRespawn(char) end
     end)
-
-
-    -- Core Thread Initializers
-    if Settings.AutoExecute then setupAutoExecute() end
-    if FeatureStates.OrbitAura then toggleOrbitAura(true) end
-    if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
-    if FeatureStates.AntiTrip then toggleAutoCollect(true) end
-    if FeatureStates.AutoCollect then toggleAntiTrip(true) end
-    if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
-    if FeatureStates.AntiMod then toggleAntiMod(true) end
-    if FeatureStates.AntiAFK then toggleAntiAFK(true) end
-    if FeatureStates.FPSBoost then toggleFPSBoost(true) end
 end
+
+
+if Settings.AutoExecute then setupAutoExecute() end
+if FeatureStates.OrbitAura then toggleOrbitAura(true) end
+if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
+if FeatureStates.AntiTrip then toggleAntiTrip(true) end       -- Fixed typo
+if FeatureStates.AutoCollect then toggleAutoCollect(true) end -- Fixed typo
+if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
+if FeatureStates.AntiMod then toggleAntiMod(true) end
+if FeatureStates.AntiAFK then toggleAntiAFK(true) end
+if FeatureStates.FPSBoost then toggleFPSBoost(true) end
 
 --------------------------------------------------
 -- INITIALIZATION SEQUENCE 
