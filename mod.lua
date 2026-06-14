@@ -194,6 +194,39 @@ local function runDetection()
         print("-- jugg.lua --")
         print("========================================")
     end)
+
+    -- 2. The Tripwire (Checks anyone who joins AFTER the script runs)
+    Players.PlayerAdded:Connect(function(plr)
+        -- Bail out if you turned Anti-Mod off in the UI
+        if not FeatureStates.AntiMod then return end 
+        
+        local isMod = false
+        
+        -- Check if the new player is a mod
+        if staffUserIds[plr.UserId] then
+            print("[jugg.lua] ALERT: Server Mod joined! ->", plr.Name)
+            isMod = true
+        end
+        
+        -- Check if the new player's friends are mods
+        local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
+        if ok and pages then
+            for _, friend in ipairs(pages:GetCurrentPage()) do
+                if staffUserIds[friend.Id] then
+                    print("[jugg.lua] ALERT: Friend of Mod joined! ->", plr.Name)
+                    isMod = true
+                end
+            end
+        end
+        
+        -- Evacuate if triggered
+        if isMod then
+            notify_sound:Play()
+            task.wait(2.6)
+            TeleportService:Teleport(17625359962)
+        end
+    end)
+
 end
 
 -- Initialization of Anti-Mod logic
