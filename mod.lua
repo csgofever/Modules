@@ -72,11 +72,20 @@ local FeatureStates = {
 
     -- VISUAL FEATURES
     Crosshair = false,
+    HideGameCrosshair = false,
     CrosshairSize = 4,
+    CrosshairTextSize = 12,
     CrosshairOpacity = 100,
     CrosshairText = true,
     CrosshairCustomText = "jugg.lua",
     CrosshairTextStyle = "Rainbow",
+    CrosshairShape = "Square",
+    CrosshairColor = "#9333EA",
+    CrosshairOutline = false,
+    CrosshairOutlineThickness = 1,
+    CrosshairOutlineColor = "#000000",
+    CrosshairGap = 0,
+    CrosshairThickness = 2,
 }
 
 local function saveSettings()
@@ -329,33 +338,290 @@ end
 --------------------------------------------------
 local crosshairGui = nil
 local crosshairUpdateLoop = nil
+local gapSliderRow = nil
+local thicknessSliderRow = nil
+
+local function parseColor(str)
+    if not str then return Settings.UIColor or Color3.fromRGB(147, 51, 234) end
+    
+    -- Hex format: #RRGGBB or RRGGBB
+    local hex = str:gsub("#", "")
+    if #hex == 6 then
+        local r = tonumber(hex:sub(1, 2), 16)
+        local g = tonumber(hex:sub(3, 4), 16)
+        local b = tonumber(hex:sub(5, 6), 16)
+        if r and g and b then
+            return Color3.fromRGB(r, g, b)
+        end
+    end
+    
+    -- RGB format: R, G, B
+    local r, g, b = str:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
+    if r and g and b then
+        return Color3.fromRGB(math.clamp(tonumber(r), 0, 255), math.clamp(tonumber(g), 0, 255), math.clamp(tonumber(b), 0, 255))
+    end
+    
+    -- Fallback/Default
+    return Settings.UIColor or Color3.fromRGB(147, 51, 234)
+end
 
 local function updateCrosshairVisuals()
+    if gapSliderRow then
+        local shape = FeatureStates.CrosshairShape or "Square"
+        gapSliderRow.Visible = (shape == "Classic" or shape == "Horizontal Line")
+    end
+    if thicknessSliderRow then
+        local shape = FeatureStates.CrosshairShape or "Square"
+        thicknessSliderRow.Visible = (shape == "Classic" or shape == "X" or shape == "Horizontal Line")
+    end
+    
     if not crosshairGui then return end
     
-    local dot = crosshairGui:FindFirstChild("Dot")
+    local shapeContainer = crosshairGui:FindFirstChild("ShapeContainer")
     local label = crosshairGui:FindFirstChild("TextLabel", true)
-    local gradient = label:FindFirstChild("UIGradient")
     
-    if dot then
+    if shapeContainer then
+        shapeContainer:ClearAllChildren()
+        
         local size = FeatureStates.CrosshairSize
-        dot.Size = UDim2.new(0, size, 0, size)
-        dot.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
-        dot.BackgroundTransparency = 1 - (FeatureStates.CrosshairOpacity / 100)
+        local opacity = 1 - (FeatureStates.CrosshairOpacity / 100)
+        local color = parseColor(FeatureStates.CrosshairColor)
+        local shape = FeatureStates.CrosshairShape or "Square"
+        local gap = FeatureStates.CrosshairGap or 0
+        
+        local function applyOutline(instance)
+            if FeatureStates.CrosshairOutline then
+                local stroke = Instance.new("UIStroke")
+                stroke.Thickness = FeatureStates.CrosshairOutlineThickness or 1
+                stroke.Color = parseColor(FeatureStates.CrosshairOutlineColor)
+                if instance:IsA("TextLabel") then
+                    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+                else
+                    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                end
+                stroke.Parent = instance
+            end
+        end
+        
+        if shape == "Square" then
+            local f = Instance.new("Frame", shapeContainer)
+            f.Size = UDim2.new(0, size, 0, size)
+            f.AnchorPoint = Vector2.new(0.5, 0.5)
+            f.Position = UDim2.new(0.5, 0, 0.5, 0)
+            f.BackgroundColor3 = color
+            f.BorderSizePixel = 0
+            f.BackgroundTransparency = opacity
+            applyOutline(f)
+        elseif shape == "Circle" then
+            local f = Instance.new("Frame", shapeContainer)
+            f.Size = UDim2.new(0, size, 0, size)
+            f.AnchorPoint = Vector2.new(0.5, 0.5)
+            f.Position = UDim2.new(0.5, 0, 0.5, 0)
+            f.BackgroundColor3 = color
+            f.BorderSizePixel = 0
+            f.BackgroundTransparency = opacity
+            addCorner(f, size)
+            applyOutline(f)
+        elseif shape == "Classic" then
+            local thickness = FeatureStates.CrosshairThickness or 2
+            local crossSize = size * 3
+            if gap == 0 then
+                local v = Instance.new("Frame", shapeContainer)
+                v.Size = UDim2.new(0, thickness, 0, crossSize)
+                v.AnchorPoint = Vector2.new(0.5, 0.5)
+                v.Position = UDim2.new(0.5, 0, 0.5, 0)
+                v.BackgroundColor3 = color
+                v.BorderSizePixel = 0
+                v.BackgroundTransparency = opacity
+                applyOutline(v)
+                
+                local h = Instance.new("Frame", shapeContainer)
+                h.Size = UDim2.new(0, crossSize, 0, thickness)
+                h.AnchorPoint = Vector2.new(0.5, 0.5)
+                h.Position = UDim2.new(0.5, 0, 0.5, 0)
+                h.BackgroundColor3 = color
+                h.BorderSizePixel = 0
+                h.BackgroundTransparency = opacity
+                applyOutline(h)
+            else
+                local length = crossSize / 2
+                
+                local left = Instance.new("Frame", shapeContainer)
+                left.Size = UDim2.new(0, length, 0, thickness)
+                left.AnchorPoint = Vector2.new(1, 0.5)
+                left.Position = UDim2.new(0.5, -gap, 0.5, 0)
+                left.BackgroundColor3 = color
+                left.BorderSizePixel = 0
+                left.BackgroundTransparency = opacity
+                applyOutline(left)
+                
+                local right = Instance.new("Frame", shapeContainer)
+                right.Size = UDim2.new(0, length, 0, thickness)
+                right.AnchorPoint = Vector2.new(0, 0.5)
+                right.Position = UDim2.new(0.5, gap, 0.5, 0)
+                right.BackgroundColor3 = color
+                right.BorderSizePixel = 0
+                right.BackgroundTransparency = opacity
+                applyOutline(right)
+                
+                local top = Instance.new("Frame", shapeContainer)
+                top.Size = UDim2.new(0, thickness, 0, length)
+                top.AnchorPoint = Vector2.new(0.5, 1)
+                top.Position = UDim2.new(0.5, 0, 0.5, -gap)
+                top.BackgroundColor3 = color
+                top.BorderSizePixel = 0
+                top.BackgroundTransparency = opacity
+                applyOutline(top)
+                
+                local bottom = Instance.new("Frame", shapeContainer)
+                bottom.Size = UDim2.new(0, thickness, 0, length)
+                bottom.AnchorPoint = Vector2.new(0.5, 0)
+                bottom.Position = UDim2.new(0.5, 0, 0.5, gap)
+                bottom.BackgroundColor3 = color
+                bottom.BorderSizePixel = 0
+                bottom.BackgroundTransparency = opacity
+                applyOutline(bottom)
+            end
+        elseif shape == "X" then
+            local thickness = FeatureStates.CrosshairThickness or 2
+            local crossSize = size * 3
+            
+            local d1 = Instance.new("Frame", shapeContainer)
+            d1.Size = UDim2.new(0, crossSize, 0, thickness)
+            d1.AnchorPoint = Vector2.new(0.5, 0.5)
+            d1.Position = UDim2.new(0.5, 0, 0.5, 0)
+            d1.BackgroundColor3 = color
+            d1.BorderSizePixel = 0
+            d1.BackgroundTransparency = opacity
+            d1.Rotation = 45
+            applyOutline(d1)
+            
+            local d2 = Instance.new("Frame", shapeContainer)
+            d2.Size = UDim2.new(0, crossSize, 0, thickness)
+            d2.AnchorPoint = Vector2.new(0.5, 0.5)
+            d2.Position = UDim2.new(0.5, 0, 0.5, 0)
+            d2.BackgroundColor3 = color
+            d2.BorderSizePixel = 0
+            d2.BackgroundTransparency = opacity
+            d2.Rotation = -45
+            applyOutline(d2)
+        elseif shape == "Horizontal Line" then
+            local thickness = FeatureStates.CrosshairThickness or 2
+            local lineSize = size * 3
+            if gap == 0 then
+                local h = Instance.new("Frame", shapeContainer)
+                h.Size = UDim2.new(0, lineSize, 0, thickness)
+                h.AnchorPoint = Vector2.new(0.5, 0.5)
+                h.Position = UDim2.new(0.5, 0, 0.5, 0)
+                h.BackgroundColor3 = color
+                h.BorderSizePixel = 0
+                h.BackgroundTransparency = opacity
+                applyOutline(h)
+            else
+                local length = lineSize / 2
+                
+                local left = Instance.new("Frame", shapeContainer)
+                left.Size = UDim2.new(0, length, 0, thickness)
+                left.AnchorPoint = Vector2.new(1, 0.5)
+                left.Position = UDim2.new(0.5, -gap, 0.5, 0)
+                left.BackgroundColor3 = color
+                left.BorderSizePixel = 0
+                left.BackgroundTransparency = opacity
+                applyOutline(left)
+                
+                local right = Instance.new("Frame", shapeContainer)
+                right.Size = UDim2.new(0, length, 0, thickness)
+                right.AnchorPoint = Vector2.new(0, 0.5)
+                right.Position = UDim2.new(0.5, gap, 0.5, 0)
+                right.BackgroundColor3 = color
+                right.BorderSizePixel = 0
+                right.BackgroundTransparency = opacity
+                applyOutline(right)
+            end
+        elseif shape == "Triangle" then
+            local t = Instance.new("TextLabel", shapeContainer)
+            t.BackgroundTransparency = 1
+            t.Size = UDim2.new(0, size * 3, 0, size * 3)
+            t.AnchorPoint = Vector2.new(0.5, 0.5)
+            t.Position = UDim2.new(0.5, 0, 0.5, 0)
+            t.Text = "▲"
+            t.TextColor3 = color
+            t.TextTransparency = opacity
+            t.TextSize = math.clamp(size * 3, 8, 100)
+            t.Font = Enum.Font.GothamBold
+            applyOutline(t)
+        elseif shape == "Arrow" then
+            local t = Instance.new("TextLabel", shapeContainer)
+            t.BackgroundTransparency = 1
+            t.Size = UDim2.new(0, size * 3, 0, size * 3)
+            t.AnchorPoint = Vector2.new(0.5, 0.5)
+            t.Position = UDim2.new(0.5, 0, 0.5, 0)
+            t.Text = "↑"
+            t.TextColor3 = color
+            t.TextTransparency = opacity
+            t.TextSize = math.clamp(size * 3, 8, 100)
+            t.Font = Enum.Font.GothamBold
+            applyOutline(t)
+        end
     end
     
     if label then
         label.Visible = FeatureStates.CrosshairText
         label.Text = FeatureStates.CrosshairCustomText
+        label.TextSize = FeatureStates.CrosshairTextSize
         
-        if gradient then gradient.Enabled = (FeatureStates.CrosshairTextStyle == "Rainbow") end
+        -- Adjust text label offset based on shape size and gap to prevent overlap
+        local shapeSize = FeatureStates.CrosshairSize
+        local offset = 8
+        local shape = FeatureStates.CrosshairShape or "Square"
+        local gap = FeatureStates.CrosshairGap or 0
+        if shape == "Classic" or shape == "Horizontal Line" then
+            if gap == 0 then
+                offset = math.max(8, (shapeSize * 1.5) + 4)
+            else
+                local length = (shapeSize * 3) / 2
+                offset = math.max(8, gap + length + 4)
+            end
+        elseif shape == "X" then
+            offset = math.max(8, (shapeSize * 1.5) + 4)
+        elseif shape == "Triangle" or shape == "Arrow" then
+            offset = math.max(8, (shapeSize * 1.5) + 4)
+        else
+            offset = math.max(8, (shapeSize / 2) + 6)
+        end
+        label.AnchorPoint = Vector2.new(0.5, 0)
+        label.Position = UDim2.new(0.5, 0, 0.5, offset) 
         
-        if FeatureStates.CrosshairTextStyle == "UI Color" then
-            label.TextColor3 = Color3.fromRGB(147, 51, 234)
+        -- Handle Style Logic
+        local gradient = label:FindFirstChild("UIGradient")
+        if FeatureStates.CrosshairTextStyle == "Rainbow" then
+            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            if gradient then gradient.Enabled = true end
+        elseif FeatureStates.CrosshairTextStyle == "UI Color" then
+            if gradient then gradient.Enabled = false end
+            label.TextColor3 = Settings.UIColor or Color3.fromRGB(147, 51, 234)
         elseif FeatureStates.CrosshairTextStyle == "White" then
+            if gradient then gradient.Enabled = false end
             label.TextColor3 = Color3.fromRGB(255, 255, 255)
         end
     end
+end
+
+-- UPDATED: Robust Crosshair Hide Logic
+local function toggleHideGameCrosshair(enabled)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+    
+    -- Recursive search to find the crosshair UI element regardless of name or path
+    local function recursiveFind(parent)
+        for _, child in pairs(parent:GetChildren()) do
+            if child:IsA("GuiObject") and string.find(string.lower(child.Name), "crosshair") then
+                child.Visible = not enabled
+            end
+            recursiveFind(child)
+        end
+    end
+    recursiveFind(playerGui)
 end
 
 local function toggleCrosshair(enabled)
@@ -366,32 +632,43 @@ local function toggleCrosshair(enabled)
         crosshairGui = Instance.new("ScreenGui")
         crosshairGui.Name = "JuggCrosshairGui"
         crosshairGui.ResetOnSpawn = false
+        -- CRITICAL: This ignores the top bar/status bar offset
+        crosshairGui.IgnoreGuiInset = true 
         crosshairGui.Parent = targetGui
         
-        local dot = Instance.new("Frame", crosshairGui)
-        dot.Name = "Dot"
-        dot.BackgroundColor3 = Color3.fromRGB(147, 51, 234)
-        dot.BorderSizePixel = 0
+        local shapeContainer = Instance.new("Frame", crosshairGui)
+        shapeContainer.Name = "ShapeContainer"
+        shapeContainer.BackgroundTransparency = 1
+        shapeContainer.BorderSizePixel = 0
+        shapeContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+        shapeContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+        shapeContainer.Size = UDim2.new(0, 0, 0, 0)
         
         local label = Instance.new("TextLabel", crosshairGui)
-        label.Size = UDim2.new(0, 200, 0, 20)
-        label.Position = UDim2.new(0.5, -100, 0.5, 10)
+        label.Name = "TextLabel"
         label.BackgroundTransparency = 1
         label.Font = Enum.Font.GothamBold
-        label.TextSize = 12
+        label.TextSize = FeatureStates.CrosshairTextSize
         label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.AutomaticSize = Enum.AutomaticSize.XY
+        -- Positioned relative to the dot's center
+        label.AnchorPoint = Vector2.new(0.5, 0)
+        label.Position = UDim2.new(0.5, 0, 0.5, 8) 
         
         local textGradient = Instance.new("UIGradient", label)
         textGradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 50)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 100)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 0, 255))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+            ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 255)),
+            ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 255))
         })
         
         updateCrosshairVisuals()
         
         crosshairUpdateLoop = RunService.RenderStepped:Connect(function()
-            if FeatureStates.CrosshairTextStyle == "Rainbow" and textGradient.Enabled then
+            if FeatureStates.CrosshairTextStyle == "Rainbow" and textGradient.Parent and textGradient.Enabled then
                 textGradient.Offset = Vector2.new(-((tick() * 1.3) % 1), 0)
             end
         end)
@@ -910,6 +1187,7 @@ local function InitializeMainMenu()
         UserInputService.InputChanged:Connect(function(input)
             if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
         end)
+        return Row
     end
 
     local function createCycleRow(parent, label, configKey, options, default, callback)
@@ -988,6 +1266,196 @@ local function InitializeMainMenu()
             local text = TextBox.Text
             FeatureStates[configKey] = text
             if callback then callback(text) end
+        end)
+    end
+
+    local function createColorPickerRow(parent, label, configKey, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.ClipsDescendants = true
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -60, 0, 40)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local ColorPreviewBtn = Instance.new("TextButton")
+        ColorPreviewBtn.Size = UDim2.new(0, 20, 0, 20)
+        ColorPreviewBtn.Position = UDim2.new(1, -32, 0, 10)
+        ColorPreviewBtn.Text = ""
+        ColorPreviewBtn.Parent = Row
+        addCorner(ColorPreviewBtn, 4)
+        addSafeBorder(ColorPreviewBtn, Color3.fromRGB(45, 45, 55))
+
+        local ExpandedPanel = Instance.new("Frame")
+        ExpandedPanel.Size = UDim2.new(1, 0, 0, 125)
+        ExpandedPanel.Position = UDim2.new(0, 0, 0, 40)
+        ExpandedPanel.BackgroundTransparency = 1
+        ExpandedPanel.BorderSizePixel = 0
+        ExpandedPanel.ClipsDescendants = true
+        ExpandedPanel.Parent = Row
+
+        local PreviewBox = Instance.new("Frame", ExpandedPanel)
+        PreviewBox.Size = UDim2.new(0, 40, 0, 100)
+        PreviewBox.Position = UDim2.new(0, 12, 0, 10)
+        PreviewBox.BorderSizePixel = 0
+        addCorner(PreviewBox, 4)
+        addSafeBorder(PreviewBox, Color3.fromRGB(35, 35, 45))
+
+        local SVFrame = Instance.new("TextButton", ExpandedPanel)
+        SVFrame.Size = UDim2.new(1, -210, 0, 100)
+        SVFrame.Position = UDim2.new(0, 64, 0, 10)
+        SVFrame.BorderSizePixel = 0
+        SVFrame.Text = ""
+        SVFrame.AutoButtonColor = false
+        addCorner(SVFrame, 4)
+
+        local WhiteGradientFrame = Instance.new("Frame", SVFrame)
+        WhiteGradientFrame.Size = UDim2.new(1, 0, 1, 0)
+        WhiteGradientFrame.BackgroundTransparency = 0
+        WhiteGradientFrame.BorderSizePixel = 0
+        addCorner(WhiteGradientFrame, 4)
+        local wg = Instance.new("UIGradient", WhiteGradientFrame)
+        wg.Color = ColorSequence.new(Color3.new(1, 1, 1))
+        wg.Transparency = NumberSequence.new(0, 1)
+
+        local BlackGradientFrame = Instance.new("Frame", SVFrame)
+        BlackGradientFrame.Size = UDim2.new(1, 0, 1, 0)
+        BlackGradientFrame.BackgroundTransparency = 0
+        BlackGradientFrame.BorderSizePixel = 0
+        addCorner(BlackGradientFrame, 4)
+        local bg = Instance.new("UIGradient", BlackGradientFrame)
+        bg.Color = ColorSequence.new(Color3.new(0, 0, 0))
+        bg.Transparency = NumberSequence.new(1, 0)
+        bg.Rotation = 90
+
+        local SVCursor = Instance.new("Frame", SVFrame)
+        SVCursor.Size = UDim2.new(0, 8, 0, 8)
+        SVCursor.BackgroundTransparency = 1
+        SVCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+        local svStroke = Instance.new("UIStroke", SVCursor)
+        svStroke.Color = Color3.new(1, 1, 1)
+        svStroke.Thickness = 1.5
+        addCorner(SVCursor, 4)
+
+        local HueSlider = Instance.new("TextButton", ExpandedPanel)
+        HueSlider.Size = UDim2.new(0, 12, 0, 100)
+        HueSlider.Position = UDim2.new(1, -132, 0, 10)
+        HueSlider.BorderSizePixel = 0
+        HueSlider.Text = ""
+        HueSlider.AutoButtonColor = false
+        addCorner(HueSlider, 4)
+
+        local hg = Instance.new("UIGradient", HueSlider)
+        hg.Rotation = 90
+        hg.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+            ColorSequenceKeypoint.new(0.167, Color3.fromRGB(255, 255, 0)),
+            ColorSequenceKeypoint.new(0.333, Color3.fromRGB(0, 255, 0)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+            ColorSequenceKeypoint.new(0.667, Color3.fromRGB(0, 0, 255)),
+            ColorSequenceKeypoint.new(0.833, Color3.fromRGB(255, 0, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+        })
+
+        local HueCursor = Instance.new("Frame", HueSlider)
+        HueCursor.Size = UDim2.new(1, 4, 0, 4)
+        HueCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+        HueCursor.BackgroundColor3 = Color3.new(1, 1, 1)
+        addCorner(HueCursor, 2)
+        addSafeBorder(HueCursor, Color3.new(0, 0, 0))
+
+        local ColorCodeLabel = Instance.new("TextLabel", ExpandedPanel)
+        ColorCodeLabel.Size = UDim2.new(0, 100, 0, 20)
+        ColorCodeLabel.Position = UDim2.new(1, -112, 0, 90)
+        ColorCodeLabel.BackgroundTransparency = 1
+        ColorCodeLabel.TextColor3 = Color3.fromRGB(180, 180, 185)
+        ColorCodeLabel.Font = Enum.Font.GothamMedium
+        ColorCodeLabel.TextSize = 10
+        ColorCodeLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+        local isExpanded = false
+        ColorPreviewBtn.MouseButton1Click:Connect(function()
+            isExpanded = not isExpanded
+            createTween(Row, {Size = isExpanded and UDim2.new(1, -5, 0, 165) or UDim2.new(1, -5, 0, 40)}, 0.15)
+        end)
+
+        -- Initialize currentColor
+        local currentColor = parseColor(FeatureStates[configKey])
+        local h, s, v = Color3.toHSV(currentColor)
+
+        local function updateDisplay()
+            local selectedColor = Color3.fromHSV(h, s, v)
+            PreviewBox.BackgroundColor3 = selectedColor
+            ColorPreviewBtn.BackgroundColor3 = selectedColor
+            ColorCodeLabel.Text = "#" .. selectedColor:ToHex():upper()
+            SVFrame.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+            SVCursor.Position = UDim2.new(s, 0, 1 - v, 0)
+            HueCursor.Position = UDim2.new(0.5, 0, h, 0)
+        end
+        updateDisplay()
+
+        local isDraggingSV = false
+        local function updateSV(input)
+            local relativeX = math.clamp((input.Position.X - SVFrame.AbsolutePosition.X) / SVFrame.AbsoluteSize.X, 0, 1)
+            local relativeY = math.clamp((input.Position.Y - SVFrame.AbsolutePosition.Y) / SVFrame.AbsoluteSize.Y, 0, 1)
+            s = relativeX
+            v = 1 - relativeY
+            updateDisplay()
+            local selectedColor = Color3.fromHSV(h, s, v)
+            FeatureStates[configKey] = "#" .. selectedColor:ToHex():upper()
+            if callback then callback(FeatureStates[configKey]) end
+        end
+
+        local isDraggingHue = false
+        local function updateHue(input)
+            local relativeY = math.clamp((input.Position.Y - HueSlider.AbsolutePosition.Y) / HueSlider.AbsoluteSize.Y, 0, 1)
+            h = relativeY
+            updateDisplay()
+            local selectedColor = Color3.fromHSV(h, s, v)
+            FeatureStates[configKey] = "#" .. selectedColor:ToHex():upper()
+            if callback then callback(FeatureStates[configKey]) end
+        end
+
+        SVFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDraggingSV = true
+                updateSV(input)
+            end
+        end)
+
+        HueSlider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDraggingHue = true
+                updateHue(input)
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                isDraggingSV = false
+                isDraggingHue = false
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                if isDraggingSV then
+                    updateSV(input)
+                elseif isDraggingHue then
+                    updateHue(input)
+                end
+            end
         end)
     end
 
@@ -1108,13 +1576,24 @@ local function InitializeMainMenu()
     createSliderRow(VoidPage, "Effect Radius", "OrbitRadius", 1, 200, FeatureStates.OrbitRadius, "", function(v) end)
     
     -- Visuals Section Integration
-    createToggleRow(VisualsPage, "Custom Crosshair Dot", "Crosshair", false, toggleCrosshair)
+    createToggleRow(VisualsPage, "Hide Game Crosshair", "HideGameCrosshair", false, toggleHideGameCrosshair)
+    createToggleRow(VisualsPage, "Custom Crosshair", "Crosshair", false, toggleCrosshair)
+    createCycleRow(VisualsPage, "Crosshair Shape", "CrosshairShape", {"Square", "Circle", "Classic", "X", "Triangle", "Arrow", "Horizontal Line"}, FeatureStates.CrosshairShape, updateCrosshairVisuals)
     createSliderRow(VisualsPage, "Crosshair Size", "CrosshairSize", 2, 20, FeatureStates.CrosshairSize, "px", updateCrosshairVisuals)
+    gapSliderRow = createSliderRow(VisualsPage, "Crosshair Gap", "CrosshairGap", 0, 30, FeatureStates.CrosshairGap, "px", updateCrosshairVisuals)
+    thicknessSliderRow = createSliderRow(VisualsPage, "Crosshair Thickness", "CrosshairThickness", 1, 10, FeatureStates.CrosshairThickness, "px", updateCrosshairVisuals)
     createSliderRow(VisualsPage, "Crosshair Opacity", "CrosshairOpacity", 0, 100, FeatureStates.CrosshairOpacity, "%", updateCrosshairVisuals)
+    createColorPickerRow(VisualsPage, "Crosshair Color", "CrosshairColor", updateCrosshairVisuals)
+    createToggleRow(VisualsPage, "Crosshair Outline", "CrosshairOutline", false, updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Outline Thickness", "CrosshairOutlineThickness", 1, 5, FeatureStates.CrosshairOutlineThickness, "px", updateCrosshairVisuals)
+    createColorPickerRow(VisualsPage, "Outline Color", "CrosshairOutlineColor", updateCrosshairVisuals)
 
     createToggleRow(VisualsPage, "Show Crosshair Text", "CrosshairText", false, updateCrosshairVisuals)
     createInputRow(VisualsPage, "Custom Text", "CrosshairCustomText", FeatureStates.CrosshairCustomText, updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Text Size", "CrosshairTextSize", 8, 24, 12, "pt", updateCrosshairVisuals)
     createCycleRow(VisualsPage, "Text Style", "CrosshairTextStyle", {"Rainbow", "UI Color", "White"}, FeatureStates.CrosshairTextStyle, updateCrosshairVisuals)
+    
+    updateCrosshairVisuals()
 
     createToggleRow(MiscPage, "Anti Subspace Tripmine", "AntiTrip", false, toggleAntiTrip)
     createToggleRow(MiscPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
