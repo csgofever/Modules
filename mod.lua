@@ -73,7 +73,7 @@ local FeatureStates = {
     -- VISUAL FEATURES
     Crosshair = false,
     HideGameCrosshair = false,
-    CrosshairSize = 4,
+    CrosshairSize = 10,
     CrosshairTextSize = 12,
     CrosshairOpacity = 100,
     CrosshairText = true,
@@ -86,6 +86,7 @@ local FeatureStates = {
     CrosshairOutlineColor = "#000000",
     CrosshairGap = 0,
     CrosshairThickness = 2,
+    CrosshairLength = 15,
     CrosshairTextOffsetX = 0,
     CrosshairTextOffsetY = 8,
 }
@@ -342,6 +343,7 @@ local crosshairGui = nil
 local crosshairUpdateLoop = nil
 local gapSliderRow = nil
 local thicknessSliderRow = nil
+local lengthSliderRow = nil
 
 local function parseColor(str)
     if not str then return Settings.UIColor or Color3.fromRGB(147, 51, 234) end
@@ -368,13 +370,15 @@ local function parseColor(str)
 end
 
 local function updateCrosshairVisuals()
+    local shape = FeatureStates.CrosshairShape or "Square"
     if gapSliderRow then
-        local shape = FeatureStates.CrosshairShape or "Square"
         gapSliderRow.Visible = (shape == "Classic" or shape == "Horizontal Line")
     end
     if thicknessSliderRow then
-        local shape = FeatureStates.CrosshairShape or "Square"
         thicknessSliderRow.Visible = (shape == "Classic" or shape == "X" or shape == "Horizontal Line")
+    end
+    if lengthSliderRow then
+        lengthSliderRow.Visible = (shape == "Classic" or shape == "X" or shape == "Horizontal Line")
     end
     
     if not crosshairGui then return end
@@ -385,11 +389,14 @@ local function updateCrosshairVisuals()
     if shapeContainer then
         shapeContainer:ClearAllChildren()
         
-        local size = FeatureStates.CrosshairSize
+        local size   = FeatureStates.CrosshairSize or 10
+        local scale  = size / 10  -- 10 = 1×, 5 = 0.5×, 20 = 2×, etc.
         local opacity = 1 - (FeatureStates.CrosshairOpacity / 100)
-        local color = parseColor(FeatureStates.CrosshairColor)
-        local shape = FeatureStates.CrosshairShape or "Square"
-        local gap = FeatureStates.CrosshairGap or 0
+        local color  = parseColor(FeatureStates.CrosshairColor)
+        local shape  = FeatureStates.CrosshairShape or "Square"
+        local gap    = (FeatureStates.CrosshairGap or 0) * scale
+        local sThickness = math.max(1, (FeatureStates.CrosshairThickness or 2) * scale)
+        local sLength    = (FeatureStates.CrosshairLength or 15) * scale
         
         local function applyOutline(instance)
             if FeatureStates.CrosshairOutline then
@@ -425,11 +432,9 @@ local function updateCrosshairVisuals()
             addCorner(f, size)
             applyOutline(f)
         elseif shape == "Classic" then
-            local thickness = FeatureStates.CrosshairThickness or 2
-            local crossSize = size * 3
             if gap == 0 then
                 local v = Instance.new("Frame", shapeContainer)
-                v.Size = UDim2.new(0, thickness, 0, crossSize)
+                v.Size = UDim2.new(0, sThickness, 0, sLength)
                 v.AnchorPoint = Vector2.new(0.5, 0.5)
                 v.Position = UDim2.new(0.5, 0, 0.5, 0)
                 v.BackgroundColor3 = color
@@ -438,7 +443,7 @@ local function updateCrosshairVisuals()
                 applyOutline(v)
                 
                 local h = Instance.new("Frame", shapeContainer)
-                h.Size = UDim2.new(0, crossSize, 0, thickness)
+                h.Size = UDim2.new(0, sLength, 0, sThickness)
                 h.AnchorPoint = Vector2.new(0.5, 0.5)
                 h.Position = UDim2.new(0.5, 0, 0.5, 0)
                 h.BackgroundColor3 = color
@@ -446,10 +451,10 @@ local function updateCrosshairVisuals()
                 h.BackgroundTransparency = opacity
                 applyOutline(h)
             else
-                local length = crossSize / 2
+                local armLen = sLength / 2
                 
                 local left = Instance.new("Frame", shapeContainer)
-                left.Size = UDim2.new(0, length, 0, thickness)
+                left.Size = UDim2.new(0, armLen, 0, sThickness)
                 left.AnchorPoint = Vector2.new(1, 0.5)
                 left.Position = UDim2.new(0.5, -gap, 0.5, 0)
                 left.BackgroundColor3 = color
@@ -458,7 +463,7 @@ local function updateCrosshairVisuals()
                 applyOutline(left)
                 
                 local right = Instance.new("Frame", shapeContainer)
-                right.Size = UDim2.new(0, length, 0, thickness)
+                right.Size = UDim2.new(0, armLen, 0, sThickness)
                 right.AnchorPoint = Vector2.new(0, 0.5)
                 right.Position = UDim2.new(0.5, gap, 0.5, 0)
                 right.BackgroundColor3 = color
@@ -467,7 +472,7 @@ local function updateCrosshairVisuals()
                 applyOutline(right)
                 
                 local top = Instance.new("Frame", shapeContainer)
-                top.Size = UDim2.new(0, thickness, 0, length)
+                top.Size = UDim2.new(0, sThickness, 0, armLen)
                 top.AnchorPoint = Vector2.new(0.5, 1)
                 top.Position = UDim2.new(0.5, 0, 0.5, -gap)
                 top.BackgroundColor3 = color
@@ -476,7 +481,7 @@ local function updateCrosshairVisuals()
                 applyOutline(top)
                 
                 local bottom = Instance.new("Frame", shapeContainer)
-                bottom.Size = UDim2.new(0, thickness, 0, length)
+                bottom.Size = UDim2.new(0, sThickness, 0, armLen)
                 bottom.AnchorPoint = Vector2.new(0.5, 0)
                 bottom.Position = UDim2.new(0.5, 0, 0.5, gap)
                 bottom.BackgroundColor3 = color
@@ -485,11 +490,8 @@ local function updateCrosshairVisuals()
                 applyOutline(bottom)
             end
         elseif shape == "X" then
-            local thickness = FeatureStates.CrosshairThickness or 2
-            local crossSize = size * 3
-            
             local d1 = Instance.new("Frame", shapeContainer)
-            d1.Size = UDim2.new(0, crossSize, 0, thickness)
+            d1.Size = UDim2.new(0, sLength, 0, sThickness)
             d1.AnchorPoint = Vector2.new(0.5, 0.5)
             d1.Position = UDim2.new(0.5, 0, 0.5, 0)
             d1.BackgroundColor3 = color
@@ -499,7 +501,7 @@ local function updateCrosshairVisuals()
             applyOutline(d1)
             
             local d2 = Instance.new("Frame", shapeContainer)
-            d2.Size = UDim2.new(0, crossSize, 0, thickness)
+            d2.Size = UDim2.new(0, sLength, 0, sThickness)
             d2.AnchorPoint = Vector2.new(0.5, 0.5)
             d2.Position = UDim2.new(0.5, 0, 0.5, 0)
             d2.BackgroundColor3 = color
@@ -508,11 +510,9 @@ local function updateCrosshairVisuals()
             d2.Rotation = -45
             applyOutline(d2)
         elseif shape == "Horizontal Line" then
-            local thickness = FeatureStates.CrosshairThickness or 2
-            local lineSize = size * 3
             if gap == 0 then
                 local h = Instance.new("Frame", shapeContainer)
-                h.Size = UDim2.new(0, lineSize, 0, thickness)
+                h.Size = UDim2.new(0, sLength, 0, sThickness)
                 h.AnchorPoint = Vector2.new(0.5, 0.5)
                 h.Position = UDim2.new(0.5, 0, 0.5, 0)
                 h.BackgroundColor3 = color
@@ -520,10 +520,10 @@ local function updateCrosshairVisuals()
                 h.BackgroundTransparency = opacity
                 applyOutline(h)
             else
-                local length = lineSize / 2
+                local armLen = sLength / 2
                 
                 local left = Instance.new("Frame", shapeContainer)
-                left.Size = UDim2.new(0, length, 0, thickness)
+                left.Size = UDim2.new(0, armLen, 0, sThickness)
                 left.AnchorPoint = Vector2.new(1, 0.5)
                 left.Position = UDim2.new(0.5, -gap, 0.5, 0)
                 left.BackgroundColor3 = color
@@ -532,7 +532,7 @@ local function updateCrosshairVisuals()
                 applyOutline(left)
                 
                 local right = Instance.new("Frame", shapeContainer)
-                right.Size = UDim2.new(0, length, 0, thickness)
+                right.Size = UDim2.new(0, armLen, 0, sThickness)
                 right.AnchorPoint = Vector2.new(0, 0.5)
                 right.Position = UDim2.new(0.5, gap, 0.5, 0)
                 right.BackgroundColor3 = color
@@ -543,25 +543,25 @@ local function updateCrosshairVisuals()
         elseif shape == "Triangle" then
             local t = Instance.new("TextLabel", shapeContainer)
             t.BackgroundTransparency = 1
-            t.Size = UDim2.new(0, size * 3, 0, size * 3)
+            t.Size = UDim2.new(0, sLength, 0, sLength)
             t.AnchorPoint = Vector2.new(0.5, 0.5)
             t.Position = UDim2.new(0.5, 0, 0.5, 0)
             t.Text = "▲"
             t.TextColor3 = color
             t.TextTransparency = opacity
-            t.TextSize = math.clamp(size * 3, 8, 100)
+            t.TextSize = math.clamp(sLength, 8, 200)
             t.Font = Enum.Font.GothamBold
             applyOutline(t)
         elseif shape == "Arrow" then
             local t = Instance.new("TextLabel", shapeContainer)
             t.BackgroundTransparency = 1
-            t.Size = UDim2.new(0, size * 3, 0, size * 3)
+            t.Size = UDim2.new(0, sLength, 0, sLength)
             t.AnchorPoint = Vector2.new(0.5, 0.5)
             t.Position = UDim2.new(0.5, 0, 0.5, 0)
             t.Text = "↑"
             t.TextColor3 = color
             t.TextTransparency = opacity
-            t.TextSize = math.clamp(size * 3, 8, 100)
+            t.TextSize = math.clamp(sLength, 8, 200)
             t.Font = Enum.Font.GothamBold
             applyOutline(t)
         end
@@ -572,24 +572,29 @@ local function updateCrosshairVisuals()
         label.Text = FeatureStates.CrosshairCustomText
         label.TextSize = FeatureStates.CrosshairTextSize
         
-        -- Adjust text label offset based on shape size and gap to prevent overlap
-        local shapeSize = FeatureStates.CrosshairSize
-        local offset = 8
-        local shape = FeatureStates.CrosshairShape or "Square"
-        local gap = FeatureStates.CrosshairGap or 0
-        if shape == "Classic" or shape == "Horizontal Line" then
-            if gap == 0 then
-                offset = math.max(8, (shapeSize * 1.5) + 4)
+        -- Adjust text label offset based on actual scaled shape dimensions
+        local size      = FeatureStates.CrosshairSize or 10
+        local scale     = size / 10
+        local sLength   = (FeatureStates.CrosshairLength or 15) * scale
+        local sThickness = math.max(1, (FeatureStates.CrosshairThickness or 2) * scale)
+        local sGap      = (FeatureStates.CrosshairGap or 0) * scale
+        local offset    = 8
+        local shape     = FeatureStates.CrosshairShape or "Square"
+        if shape == "Classic" then
+            if sGap == 0 then
+                offset = math.max(8, (sLength / 2) + 4)
             else
-                local length = (shapeSize * 3) / 2
-                offset = math.max(8, gap + length + 4)
+                offset = math.max(8, sGap + (sLength / 2) + 4)
             end
+        elseif shape == "Horizontal Line" then
+            offset = math.max(8, (sThickness / 2) + 6)
         elseif shape == "X" then
-            offset = math.max(8, (shapeSize * 1.5) + 4)
+            offset = math.max(8, (sLength / 2) * 0.75 + 4)
         elseif shape == "Triangle" or shape == "Arrow" then
-            offset = math.max(8, (shapeSize * 1.5) + 4)
+            offset = math.max(8, (sLength / 2) + 4)
         else
-            offset = math.max(8, (shapeSize / 2) + 6)
+            -- Square / Circle
+            offset = math.max(8, (size / 2) + 6)
         end
         local extraX = FeatureStates.CrosshairTextOffsetX or 0
         local extraY = FeatureStates.CrosshairTextOffsetY or 0
@@ -1621,9 +1626,10 @@ local function InitializeMainMenu()
     createToggleRow(VisualsPage, "Hide Game Crosshair", "HideGameCrosshair", false, toggleHideGameCrosshair)
     createToggleRow(VisualsPage, "Custom Crosshair", "Crosshair", false, toggleCrosshair)
     createCycleRow(VisualsPage, "Crosshair Shape", "CrosshairShape", {"Square", "Circle", "Classic", "X", "Triangle", "Arrow", "Horizontal Line"}, FeatureStates.CrosshairShape, updateCrosshairVisuals)
-    createSliderRow(VisualsPage, "Crosshair Size", "CrosshairSize", 2, 20, FeatureStates.CrosshairSize, "px", updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Crosshair Size", "CrosshairSize", 1, 30, FeatureStates.CrosshairSize, "x", updateCrosshairVisuals)
     gapSliderRow = createSliderRow(VisualsPage, "Crosshair Gap", "CrosshairGap", 0, 30, FeatureStates.CrosshairGap, "px", updateCrosshairVisuals)
     thicknessSliderRow = createSliderRow(VisualsPage, "Crosshair Thickness", "CrosshairThickness", 1, 10, FeatureStates.CrosshairThickness, "px", updateCrosshairVisuals)
+    lengthSliderRow = createSliderRow(VisualsPage, "Crosshair Length", "CrosshairLength", 4, 60, FeatureStates.CrosshairLength, "px", updateCrosshairVisuals)
     createSliderRow(VisualsPage, "Crosshair Opacity", "CrosshairOpacity", 0, 100, FeatureStates.CrosshairOpacity, "%", updateCrosshairVisuals)
     createColorPickerRow(VisualsPage, "Crosshair Color", "CrosshairColor", updateCrosshairVisuals)
     createToggleRow(VisualsPage, "Crosshair Outline", "CrosshairOutline", false, updateCrosshairVisuals)
