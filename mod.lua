@@ -86,6 +86,8 @@ local FeatureStates = {
     CrosshairOutlineColor = "#000000",
     CrosshairGap = 0,
     CrosshairThickness = 2,
+    CrosshairTextOffsetX = 0,
+    CrosshairTextOffsetY = 8,
 }
 
 local function saveSettings()
@@ -589,8 +591,10 @@ local function updateCrosshairVisuals()
         else
             offset = math.max(8, (shapeSize / 2) + 6)
         end
+        local extraX = FeatureStates.CrosshairTextOffsetX or 0
+        local extraY = FeatureStates.CrosshairTextOffsetY or 0
         label.AnchorPoint = Vector2.new(0.5, 0)
-        label.Position = UDim2.new(0.5, 0, 0.5, offset) 
+        label.Position = UDim2.new(0.5, extraX, 0.5, offset + extraY)
         
         -- Handle Style Logic
         local gradient = label:FindFirstChild("UIGradient")
@@ -607,21 +611,59 @@ local function updateCrosshairVisuals()
     end
 end
 
--- UPDATED: Robust Crosshair Hide Logic
-local function toggleHideGameCrosshair(enabled)
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-    
-    -- Recursive search to find the crosshair UI element regardless of name or path
+-- UPDATED: Robust Crosshair Hide Logic (persistent across respawns)
+local hideCrosshairConnection = nil
+
+local function applyHideCrosshair(playerGui)
     local function recursiveFind(parent)
         for _, child in pairs(parent:GetChildren()) do
             if child:IsA("GuiObject") and string.find(string.lower(child.Name), "crosshair") then
-                child.Visible = not enabled
+                child.Visible = false
             end
             recursiveFind(child)
         end
     end
     recursiveFind(playerGui)
+end
+
+local function toggleHideGameCrosshair(enabled)
+    FeatureStates.HideGameCrosshair = enabled
+    
+    -- Disconnect any existing watcher
+    if hideCrosshairConnection then
+        hideCrosshairConnection:Disconnect()
+        hideCrosshairConnection = nil
+    end
+    
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+    
+    if enabled then
+        -- Hide all existing crosshair elements now
+        applyHideCrosshair(playerGui)
+        -- Watch for newly added descendants (e.g. after respawn rebuilds the GUI)
+        hideCrosshairConnection = playerGui.DescendantAdded:Connect(function(descendant)
+            if descendant:IsA("GuiObject") and string.find(string.lower(descendant.Name), "crosshair") then
+                -- Small delay so the game finishes parenting the element first
+                task.defer(function()
+                    if descendant and descendant.Parent and FeatureStates.HideGameCrosshair then
+                        descendant.Visible = false
+                    end
+                end)
+            end
+        end)
+    else
+        -- Restore all hidden crosshair elements
+        local function recursiveShow(parent)
+            for _, child in pairs(parent:GetChildren()) do
+                if child:IsA("GuiObject") and string.find(string.lower(child.Name), "crosshair") then
+                    child.Visible = true
+                end
+                recursiveShow(child)
+            end
+        end
+        recursiveShow(playerGui)
+    end
 end
 
 local function toggleCrosshair(enabled)
@@ -1592,6 +1634,8 @@ local function InitializeMainMenu()
     createInputRow(VisualsPage, "Custom Text", "CrosshairCustomText", FeatureStates.CrosshairCustomText, updateCrosshairVisuals)
     createSliderRow(VisualsPage, "Text Size", "CrosshairTextSize", 8, 24, 12, "pt", updateCrosshairVisuals)
     createCycleRow(VisualsPage, "Text Style", "CrosshairTextStyle", {"Rainbow", "UI Color", "White"}, FeatureStates.CrosshairTextStyle, updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Text Offset X", "CrosshairTextOffsetX", -100, 100, FeatureStates.CrosshairTextOffsetX, "px", updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Text Offset Y", "CrosshairTextOffsetY", -100, 100, FeatureStates.CrosshairTextOffsetY, "px", updateCrosshairVisuals)
     
     updateCrosshairVisuals()
 
@@ -1636,6 +1680,11 @@ local function InitializeMainMenu()
         if FeatureStates.OrbitAura then toggleOrbitAura(false) task.wait(0.1) toggleOrbitAura(true) end
         if FeatureStates.SmoothOrbit then toggleSmoothOrbit(false) task.wait(0.1) toggleSmoothOrbit(true) end
         if FeatureStates.AutoRespawn then setupRespawn(char) end
+        -- Re-apply hide crosshair after respawn rebuilds PlayerGui
+        if FeatureStates.HideGameCrosshair then
+            task.wait(0.5)
+            toggleHideGameCrosshair(true)
+        end
     end)
 end
 
