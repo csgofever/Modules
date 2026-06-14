@@ -19,15 +19,11 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
-
-
 --features
 local hrp = character:WaitForChild("HumanoidRootPart")
 local trip_hrp
 local rs = game:GetService("RunService")
 local trip_conn_a, trip_conn_b
-
-
 
 -- CLEAR COMPONENT: Wipes out previous menus to stop duplicate rendering
 local targetGui = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
@@ -50,10 +46,11 @@ local Settings = {
     UITransparency = 0,
     AnimationSpeed = 0.2,
     ToggleKey = Enum.KeyCode.RightShift,
-    VoidKey = Enum.KeyCode.V, -- NEW KEYBIND
-    AutoExecute = true, -- AutoExecute default setting state copied from mod.lua logic
+    VoidKey = Enum.KeyCode.V,
+    AutoExecute = true,
+    ShowWatermark = true, -- Controls startup intro animation display status
+    ShowGuiOnLoad = true, -- Controls if dashboard panels show instantly at load
 }
-
 
 local FeatureStates = {
     OrbitAura = false,
@@ -74,7 +71,6 @@ local FeatureStates = {
     OrbitRadius = 25,
 }
 
-
 local function saveSettings()
     if makefolder and isfolder and not isfolder(FOLDER_NAME) then
         pcall(function() makefolder(FOLDER_NAME) end)
@@ -87,6 +83,8 @@ local function saveSettings()
             AnimationSpeed = Settings.AnimationSpeed,
             ToggleKey = Settings.ToggleKey.Name,
             AutoExecute = Settings.AutoExecute,
+            ShowWatermark = Settings.ShowWatermark,
+            ShowGuiOnLoad = Settings.ShowGuiOnLoad,
         },
         FeatureStates = FeatureStates
     }
@@ -110,6 +108,8 @@ local function loadSettings()
                     if data.Settings.AnimationSpeed ~= nil then Settings.AnimationSpeed = data.Settings.AnimationSpeed end
                     if data.Settings.ToggleKey then Settings.ToggleKey = Enum.KeyCode[data.Settings.ToggleKey] end
                     if data.Settings.AutoExecute ~= nil then Settings.AutoExecute = data.Settings.AutoExecute end
+                    if data.Settings.ShowWatermark ~= nil then Settings.ShowWatermark = data.Settings.ShowWatermark end
+                    if data.Settings.ShowGuiOnLoad ~= nil then Settings.ShowGuiOnLoad = data.Settings.ShowGuiOnLoad end
                 end
                 if data.FeatureStates then
                     for key, value in pairs(data.FeatureStates) do FeatureStates[key] = value end
@@ -121,9 +121,8 @@ end
 
 loadSettings()
 
-
 --------------------------------------------------
--- ANTI-MOD DETECTION ENGINE (FROM mod (1).lua)
+-- ANTI-MOD DETECTION ENGINE
 --------------------------------------------------
 local staffUserIds = {}
 local groupId = game.CreatorId
@@ -170,6 +169,7 @@ local function fetchUsersInRole(roleId)
 end
 
 local function runDetection()
+    -- 1. Initial server sweep
     task.spawn(function()
         local staffNames, friendStaffNames = {}, {}
         for _, plr in ipairs(Players:GetPlayers()) do
@@ -187,46 +187,43 @@ local function runDetection()
         print("Server Mods: " .. (#staffNames > 0 and table.concat(staffNames, ", ") or "None"))
         print("Friend Mods: " .. (#friendStaffNames > 0 and table.concat(friendStaffNames, ", ") or "None"))
         if #staffNames > 0 or #friendStaffNames > 0 then
-            notify_sound:Play()
-			task.wait(2.6)
+            if notify_sound then notify_sound:Play() end
+            task.wait(2.6)
             TeleportService:Teleport(17625359962)
         end
         print("-- jugg.lua --")
         print("========================================")
     end)
 
-    -- 2. The Tripwire (Checks anyone who joins AFTER the script runs)
-    Players.PlayerAdded:Connect(function(plr)
-        -- Bail out if you turned Anti-Mod off in the UI
-        if not FeatureStates.AntiMod then return end 
-        
-        local isMod = false
-        
-        -- Check if the new player is a mod
-        if staffUserIds[plr.UserId] then
-            print("[jugg.lua] ALERT: Server Mod joined! ->", plr.Name)
-            isMod = true
-        end
-        
-        -- Check if the new player's friends are mods
-        local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
-        if ok and pages then
-            for _, friend in ipairs(pages:GetCurrentPage()) do
-                if staffUserIds[friend.Id] then
-                    print("[jugg.lua] ALERT: Friend of Mod joined! ->", plr.Name)
-                    isMod = true
+    -- 2. Permanent Late-Join Monitor Protection Loop
+    if not _G.AntiModConnected then
+        _G.AntiModConnected = true
+        Players.PlayerAdded:Connect(function(plr)
+            if not FeatureStates.AntiMod then return end
+            local isMod = false
+            
+            if staffUserIds[plr.UserId] then
+                print("[jugg.lua] ALERT: Server Mod late-joined! ->", plr.Name)
+                isMod = true
+            end
+            
+            local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
+            if ok and pages then
+                for _, friend in ipairs(pages:GetCurrentPage()) do
+                    if staffUserIds[friend.Id] then
+                        print("[jugg.lua] ALERT: Friend of Mod late-joined! ->", plr.Name)
+                        isMod = true
+                    end
                 end
             end
-        end
-        
-        -- Evacuate if triggered
-        if isMod then
-            notify_sound:Play()
-            task.wait(2.6)
-            TeleportService:Teleport(17625359962)
-        end
-    end)
-
+            
+            if isMod then
+                if notify_sound then notify_sound:Play() end
+                task.wait(2.6)
+                TeleportService:Teleport(17625359962)
+            end
+        end)
+    end
 end
 
 -- Initialization of Anti-Mod logic
@@ -234,12 +231,9 @@ for _, roleId in ipairs(extractStaffRoleIds()) do
     for uid, _ in pairs(fetchUsersInRole(roleId)) do staffUserIds[uid] = true end
 end
 
---staffUserIds[3951615367] = true --testuserid
-
 --------------------------------------------------
--- AUTO EXECUTE / TELEPORT INTEGRATION (FROM MOD.LUA)
+-- AUTO EXECUTE / TELEPORT INTEGRATION
 --------------------------------------------------
-
 local function setupAutoExecute()
     pcall(function()
         if not Settings.AutoExecute then return end
@@ -253,13 +247,11 @@ local function setupAutoExecute()
                 end)
             ]])
         end
-     pcall(function()
-         -- Ensures auto-run settings maintain globally persistent behavior structures
-         if not isfolder("jugglua") then makefolder("jugglua") end
-     end)
+        pcall(function()
+            if not isfolder("jugglua") then makefolder("jugglua") end
+        end)
     end)
 end
-
 
 --------------------------------------------------
 -- MOTION UTILITIES & IN-GAME UTILS
@@ -407,29 +399,20 @@ local function det()
 end
 
 local function startAntiSubspace()
-    -- Only connect if they aren't already connected
     if not trip_conn_a then
         trip_conn_a = game:GetService("RunService").Heartbeat:Connect(gethrp)
         trip_conn_b = game:GetService("RunService").Heartbeat:Connect(det)
-        --print("Anti-Subspace Loop STARTED")
     end
 end
 
 local function stopAntiSubspace()
-    -- Disconnect the loops to stop the detection
     if trip_conn_a then trip_conn_a:Disconnect(); trip_conn_a = nil end
     if trip_conn_b then trip_conn_b:Disconnect(); trip_conn_b = nil end
-    --print("Anti-Subspace Loop STOPPED")
 end
-
 
 local function toggleAntiTrip(enabled)
     FeatureStates.AntiTrip = enabled
-    if enabled then
-        startAntiSubspace()
-    else
-        stopAntiSubspace()
-    end
+    if enabled then startAntiSubspace() else stopAntiSubspace() end
 end
 
 local function toggleAutoCollect(enabled)
@@ -448,8 +431,6 @@ local function toggleAutoCollect(enabled)
         if collectConnection then collectConnection:Disconnect() collectConnection = nil end
     end
 end
-
-
 
 local function setupRespawn(char)
     local humanoid = char:WaitForChild("Humanoid")
@@ -558,7 +539,6 @@ local function toggleVoidHide(enabled)
         returnStartTime = tick()
         if voidConnection then voidConnection:Disconnect(); voidConnection = nil end
 
-        -- Smooth return to OriginalCFrame
         task.spawn(function()
             while isReturning and OriginalCFrame and hrp do
                 local elapsed = tick() - returnStartTime
@@ -593,6 +573,7 @@ local function InitializeMainMenu()
     MainFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 11)
     MainFrame.BackgroundTransparency = Settings.UITransparency
     MainFrame.BorderSizePixel = 0
+    MainFrame.Visible = Settings.ShowGuiOnLoad -- Respect Silent GUI loading conditions
     MainFrame.Parent = ScreenGui
     addCorner(MainFrame, 8)
     addSafeBorder(MainFrame, Color3.fromRGB(28, 28, 35))
@@ -766,7 +747,7 @@ local function InitializeMainMenu()
         end)
     end
 
-local function createSliderRow(parent, label, configKey, min, max, default, suffix, callback)
+    local function createSliderRow(parent, label, configKey, min, max, default, suffix, callback)
         local Row = Instance.new("Frame")
         Row.Size = UDim2.new(1, -5, 0, 50)
         Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
@@ -846,60 +827,6 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
         end)
         UserInputService.InputChanged:Connect(function(input)
             if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
-        end)
-    end
-
-    local function createCycleRow(parent, label, configKey, options, default, callback)
-        local Row = Instance.new("Frame")
-        Row.Size = UDim2.new(1, -5, 0, 40)
-        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-        Row.Parent = parent
-        
-        local corner1 = Instance.new("UICorner")
-        corner1.CornerRadius = UDim.new(0, 5)
-        corner1.Parent = Row
-        
-        local stroke1 = Instance.new("UIStroke")
-        stroke1.Color = Color3.fromRGB(22, 22, 26)
-        stroke1.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke1.Parent = Row
-
-        local TextLabel = Instance.new("TextLabel")
-        TextLabel.Size = UDim2.new(1, -110, 1, 0)
-        TextLabel.Position = UDim2.new(0, 12, 0, 0)
-        TextLabel.BackgroundTransparency = 1
-        TextLabel.Text = label
-        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
-        TextLabel.Font = Enum.Font.GothamMedium
-        TextLabel.TextSize = 11
-        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
-        TextLabel.Parent = Row
-
-        local ActionBtn = Instance.new("TextButton")
-        ActionBtn.Size = UDim2.new(0, 90, 0, 24)
-        ActionBtn.Position = UDim2.new(1, -102, 0.5, -12)
-        ActionBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-        ActionBtn.Text = default
-        ActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        ActionBtn.Font = Enum.Font.GothamBold
-        ActionBtn.TextSize = 10
-        ActionBtn.Parent = Row
-        
-        local corner2 = Instance.new("UICorner")
-        corner2.CornerRadius = UDim.new(0, 4)
-        corner2.Parent = ActionBtn
-        
-        local stroke2 = Instance.new("UIStroke")
-        stroke2.Color = Settings.UIColor
-        stroke2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke2.Parent = ActionBtn
-
-        local currentIndex = table.find(options, default) or 1
-        ActionBtn.MouseButton1Click:Connect(function()
-            currentIndex = (currentIndex % #options) + 1
-            ActionBtn.Text = options[currentIndex]
-            FeatureStates[configKey] = options[currentIndex]
-            if callback then callback(options[currentIndex]) end
         end)
     end
 
@@ -1036,7 +963,6 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
         end)
     end
 
-
     local OrbitPage = createTab("Orbit")
     local VoidPage = createTab("Void")
     local VisualsPage = createTab("Visuals")
@@ -1050,14 +976,12 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
     createToggleRow(OrbitPage, "Orbit Kill Aura", "OrbitAura", false, toggleOrbitAura)
     createToggleRow(OrbitPage, "Smooth Orbit", "SmoothOrbit", false, toggleSmoothOrbit)
     
-    -- Void Controls
     createToggleRow(VoidPage, "Enable Void Hide", "VoidEnabled", false, toggleVoidHide)
     createKeybindSelector(VoidPage, "Void Toggle Keybind", "VoidKey")
     
     createSliderRow(VoidPage, "Void Distance", "VoidDistancePercent", 1, 100, FeatureStates.VoidDistancePercent, "%", function(v) end)
     createSliderRow(VoidPage, "Height Offset", "HeightOffset", -1000, 1000, FeatureStates.HeightOffset, "st", function(v) end)
     
-    -- Motion Effects
     createCycleRow(VoidPage, "Movement Pattern", "MotionMode", {"None", "Spin", "Orbit", "Random", "Desync"}, FeatureStates.MotionMode, function(v) end)
     createSliderRow(VoidPage, "Movement Speed", "MotionSpeed", 0, 100, FeatureStates.MotionSpeed, "", function(v) end)
     createSliderRow(VoidPage, "Effect Radius", "OrbitRadius", 1, 200, FeatureStates.OrbitRadius, "", function(v) end)
@@ -1069,21 +993,19 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
     createToggleRow(MiscPage, "Anti-AFK", "AntiAFK", false, toggleAntiAFK)
     createToggleRow(MiscPage, "FPS Boost", "FPSBoost", false, toggleFPSBoost)
 
-
-    createToggleRow(SettingsPage, "Auto Execute", "AutoExecute", true, function(state)
-    -- Instantly catches changes to active state context elements
-    end)
-
+    createToggleRow(SettingsPage, "Auto Execute", "AutoExecute", true, function(state) end)
+    createToggleRow(SettingsPage, "Show Intro Watermark", "ShowWatermark", true, function(state) end)
+    createToggleRow(SettingsPage, "Show GUI on Startup", "ShowGuiOnLoad", true, function(state) end)
 
     createKeybindSelector(SettingsPage, "Menu Keybind", "ToggleKey")
-
 
     createActionButton(SettingsPage, "Save Current Settings Parameters", function()
         saveSettings()
     end)
 
     for key, _ in pairs(RegisteredUIComponents) do
-        updateUIToggleVisual(key, string.find(key, "AutoExecute") and true or false)
+        local isSetting = (key == "AutoExecute" or key == "ShowWatermark" or key == "ShowGuiOnLoad")
+        updateUIToggleVisual(key, isSetting)
     end
 
     UserInputService.InputBegan:Connect(function(input, processed)
@@ -1091,7 +1013,6 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
             if input.KeyCode == Settings.ToggleKey then
                 MainFrame.Visible = not MainFrame.Visible
             elseif input.KeyCode == Settings.VoidKey then
-                -- Automatically toggle Void Hide
                 local newState = not FeatureStates.VoidEnabled
                 toggleVoidHide(newState)
                 updateUIToggleVisual("VoidEnabled", false)
@@ -1108,112 +1029,116 @@ local function createSliderRow(parent, label, configKey, min, max, default, suff
     end)
 end
 
-
-if Settings.AutoExecute then setupAutoExecute() end
-if FeatureStates.OrbitAura then toggleOrbitAura(true) end
-if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
-if FeatureStates.AntiTrip then toggleAntiTrip(true) end       -- Fixed typo
-if FeatureStates.AutoCollect then toggleAutoCollect(true) end -- Fixed typo
-if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
-if FeatureStates.AntiMod then toggleAntiMod(true) end
-if FeatureStates.AntiAFK then toggleAntiAFK(true) end
-if FeatureStates.FPSBoost then toggleFPSBoost(true) end
+--------------------------------------------------
+-- INITIALIZATION THREAD EXECUTOR (INSTANT RUN)
+--------------------------------------------------
+local function initializeCoreThreads()
+    if Settings.AutoExecute then setupAutoExecute() end
+    if FeatureStates.OrbitAura then toggleOrbitAura(true) end
+    if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
+    if FeatureStates.AntiTrip then toggleAntiTrip(true) end       -- Fixed Typo
+    if FeatureStates.AutoCollect then toggleAutoCollect(true) end -- Fixed Typo
+    if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
+    if FeatureStates.AntiMod then toggleAntiMod(true) end
+    if FeatureStates.AntiAFK then toggleAntiAFK(true) end
+    if FeatureStates.FPSBoost then toggleFPSBoost(true) end
+end
 
 --------------------------------------------------
 -- INITIALIZATION SEQUENCE 
 --------------------------------------------------
+initializeCoreThreads() -- Activates instantly on game load ignoring layout configurations
+
 task.spawn(function()
-    -- Staggers the initialization thread to completely avoid script startup lag
-    task.wait(5)
+    if Settings.ShowWatermark then
+        task.wait(5)
 
-    local overlayGui = gethui() or game:GetService("CoreGui")
-    local watermarkGui = Instance.new("ScreenGui")
-    watermarkGui.Name = "JuggWatermark"
-    watermarkGui.DisplayOrder = 2147483647
-    watermarkGui.Parent = overlayGui
+        local overlayGui = gethui() or game:GetService("CoreGui")
+        local watermarkGui = Instance.new("ScreenGui")
+        watermarkGui.Name = "JuggWatermark"
+        watermarkGui.DisplayOrder = 2147483647
+        watermarkGui.Parent = overlayGui
 
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(0, 750, 0, 260) 
-    container.Position = UDim2.new(0.5, 0, 0.5, -25)
-    container.AnchorPoint = Vector2.new(0.5, 0.5)
-    container.BackgroundTransparency = 1
-    container.Parent = watermarkGui
+        local container = Instance.new("Frame")
+        container.Size = UDim2.new(0, 750, 0, 260) 
+        container.Position = UDim2.new(0.5, 0, 0.5, -25)
+        container.AnchorPoint = Vector2.new(0.5, 0.5)
+        container.BackgroundTransparency = 1
+        container.Parent = watermarkGui
 
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 0, 190) 
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = "<i>jugg</i>"
-    textLabel.RichText = true
-    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.ArialBold
-    textLabel.TextTransparency = 1
-    textLabel.Parent = container
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 0, 190) 
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "<i>jugg</i>"
+        textLabel.RichText = true
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.ArialBold
+        textLabel.TextTransparency = 1
+        textLabel.Parent = container
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(15, 15, 20)
-    stroke.Thickness = 14
-    stroke.Transparency = 1
-    stroke.Parent = textLabel
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(15, 15, 20)
+        stroke.Thickness = 14
+        stroke.Transparency = 1
+        stroke.Parent = textLabel
 
-    local subtitleLabel = Instance.new("TextLabel")
-    subtitleLabel.Size = UDim2.new(1, 0, 0, 35)
-    subtitleLabel.Position = UDim2.new(0, 0, 0, 195) 
-    subtitleLabel.BackgroundTransparency = 1
-    subtitleLabel.Text = "<i>the best lua</i>"
-    subtitleLabel.RichText = true 
-    subtitleLabel.TextColor3 = Color3.fromRGB(140, 20, 255)
-    subtitleLabel.TextSize = 24
-    subtitleLabel.Font = Enum.Font.GothamBold
-    subtitleLabel.TextTransparency = 1
-    subtitleLabel.Parent = container
+        local subtitleLabel = Instance.new("TextLabel")
+        subtitleLabel.Size = UDim2.new(1, 0, 0, 35)
+        subtitleLabel.Position = UDim2.new(0, 0, 0, 195) 
+        subtitleLabel.BackgroundTransparency = 1
+        subtitleLabel.Text = "<i>the best lua</i>"
+        subtitleLabel.RichText = true 
+        subtitleLabel.TextColor3 = Color3.fromRGB(140, 20, 255)
+        subtitleLabel.TextSize = 24
+        subtitleLabel.Font = Enum.Font.GothamBold
+        subtitleLabel.TextTransparency = 1
+        subtitleLabel.Parent = container
 
-    local subtitleStroke = Instance.new("UIStroke")
-    subtitleStroke.Color = Color3.fromRGB(10, 10, 10)
-    subtitleStroke.Thickness = 3
-    subtitleStroke.Transparency = 1
-    subtitleStroke.Parent = subtitleLabel
+        local subtitleStroke = Instance.new("UIStroke")
+        subtitleStroke.Color = Color3.fromRGB(10, 10, 10)
+        subtitleStroke.Thickness = 3
+        subtitleStroke.Transparency = 1
+        subtitleStroke.Parent = subtitleLabel
 
-    local uiGradient = Instance.new("UIGradient")
-    uiGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 0, 50)),
-        ColorSequenceKeypoint.new(0.2,  Color3.fromRGB(255, 140, 0)),
-        ColorSequenceKeypoint.new(0.4,  Color3.fromRGB(0, 255, 100)),
-        ColorSequenceKeypoint.new(0.6,  Color3.fromRGB(0, 220, 255)),
-        ColorSequenceKeypoint.new(0.8,  Color3.fromRGB(150, 0, 255)),
-        ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 0, 50))
-    })
-    uiGradient.Parent = textLabel
+        local uiGradient = Instance.new("UIGradient")
+        uiGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 0, 50)),
+            ColorSequenceKeypoint.new(0.2,  Color3.fromRGB(255, 140, 0)),
+            ColorSequenceKeypoint.new(0.4,  Color3.fromRGB(0, 255, 100)),
+            ColorSequenceKeypoint.new(0.6,  Color3.fromRGB(0, 220, 255)),
+            ColorSequenceKeypoint.new(0.8,  Color3.fromRGB(150, 0, 255)),
+            ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 0, 50))
+        })
+        uiGradient.Parent = textLabel
 
-    local waveSpeed = 1.3
-    local animationLoop = RunService.RenderStepped:Connect(function()
-        local offset = (tick() * waveSpeed) % 1
-        uiGradient.Offset = Vector2.new(-offset, 0)
-    end)
+        local waveSpeed = 1.3
+        local animationLoop = RunService.RenderStepped:Connect(function()
+            local offset = (tick() * waveSpeed) % 1
+            uiGradient.Offset = Vector2.new(-offset, 0)
+        end)
 
-    -- Fade Intro In
-    TweenService:Create(textLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-    TweenService:Create(stroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
-    TweenService:Create(subtitleLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
-    TweenService:Create(subtitleStroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
+        TweenService:Create(textLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
+        TweenService:Create(stroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
+        TweenService:Create(subtitleLabel, TweenInfo.new(0.2), {TextTransparency = 0}):Play()
+        TweenService:Create(subtitleStroke, TweenInfo.new(0.2), {Transparency = 0}):Play()
+        
+        task.wait(3.5)
+
+        local slideTime = 0.55
+        local slideTweenInfo = TweenInfo.new(slideTime, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        
+        TweenService:Create(container, slideTweenInfo, {Position = UDim2.new(0.5, 0, 0.5, 180)}):Play()
+        TweenService:Create(textLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
+        TweenService:Create(stroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
+        TweenService:Create(subtitleLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
+        TweenService:Create(subtitleStroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
+        
+        task.wait(slideTime)
+        animationLoop:Disconnect()
+        watermarkGui:Destroy()
+    end
     
-    -- Display time
-    task.wait(3.5)
-
-    -- Slide out sequence
-    local slideTime = 0.55
-    local slideTweenInfo = TweenInfo.new(slideTime, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-    
-    TweenService:Create(container, slideTweenInfo, {Position = UDim2.new(0.5, 0, 0.5, 180)}):Play()
-    TweenService:Create(textLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
-    TweenService:Create(stroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
-    TweenService:Create(subtitleLabel, TweenInfo.new(slideTime - 0.1), {TextTransparency = 1}):Play()
-    TweenService:Create(subtitleStroke, TweenInfo.new(slideTime - 0.1), {Transparency = 1}):Play()
-    
-    task.wait(slideTime)
-    animationLoop:Disconnect()
-    watermarkGui:Destroy()
-    
-    -- Sequential handover: Generate dashboard now that intro has closed
+    -- Handles sequential loading cleanly if animation configuration is bypassed 
     InitializeMainMenu()
 end)
