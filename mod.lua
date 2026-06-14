@@ -28,7 +28,7 @@ local trip_conn_a, trip_conn_b
 -- CLEAR COMPONENT: Wipes out previous menus to stop duplicate rendering
 local targetGui = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
 for _, oldUi in pairs(targetGui:GetChildren()) do
-    if oldUi.Name == "JuggProfileGui" or oldUi.Name == "JuggPremiumGui" or oldUi.Name == "JuggWatermark" then
+    if oldUi.Name == "JuggProfileGui" or oldUi.Name == "JuggCrosshairGui" then
         oldUi:Destroy()
     end
 end
@@ -48,8 +48,8 @@ local Settings = {
     ToggleKey = Enum.KeyCode.RightShift,
     VoidKey = Enum.KeyCode.V,
     AutoExecute = true,
-    ShowWatermark = true, -- Controls startup intro animation display status
-    ShowGuiOnLoad = true, -- Controls if dashboard panels show instantly at load
+    ShowWatermark = true, 
+    ShowGuiOnLoad = true, 
 }
 
 local FeatureStates = {
@@ -62,13 +62,21 @@ local FeatureStates = {
     AntiAFK = false,
     FPSBoost = false,
 
-    -- NEW VOID FEATURES
+    -- VOID FEATURES
     VoidEnabled = false,
     VoidDistancePercent = 100,
     HeightOffset = 0,
     MotionMode = "None",
     MotionSpeed = 10,
     OrbitRadius = 25,
+
+    -- VISUAL FEATURES
+    Crosshair = false,
+    CrosshairSize = 4,
+    CrosshairOpacity = 100,
+    CrosshairText = true,
+    CrosshairCustomText = "jugg.lua",
+    CrosshairTextStyle = "Rainbow",
 }
 
 local function saveSettings()
@@ -169,13 +177,12 @@ local function fetchUsersInRole(roleId)
 end
 
 local function runDetection()
-    -- 1. Initial server sweep
     task.spawn(function()
         local staffNames, friendStaffNames = {}, {}
         for _, plr in ipairs(Players:GetPlayers()) do
             if staffUserIds[plr.UserId] then table.insert(staffNames, plr.Name) end
             
-            task.wait(0.035) -- Throttling
+            task.wait(0.035)
             local ok, pages = pcall(function() return Players:GetFriendsAsync(plr.UserId) end)
             if ok and pages then
                 for _, friend in ipairs(pages:GetCurrentPage()) do
@@ -195,7 +202,6 @@ local function runDetection()
         print("========================================")
     end)
 
-    -- 2. Permanent Late-Join Monitor Protection Loop
     if not _G.AntiModConnected then
         _G.AntiModConnected = true
         Players.PlayerAdded:Connect(function(plr)
@@ -226,7 +232,6 @@ local function runDetection()
     end
 end
 
--- Initialization of Anti-Mod logic
 for _, roleId in ipairs(extractStaffRoleIds()) do
     for uid, _ in pairs(fetchUsersInRole(roleId)) do staffUserIds[uid] = true end
 end
@@ -319,9 +324,86 @@ local function makeDraggable(frame, handle)
     end)
 end
 
--- Feature Modules
+--------------------------------------------------
+-- REFACTORED CROSSHAIR SYSTEM
+--------------------------------------------------
+local crosshairGui = nil
+local crosshairUpdateLoop = nil
+
+local function updateCrosshairVisuals()
+    if not crosshairGui then return end
+    
+    local dot = crosshairGui:FindFirstChild("Dot")
+    local label = crosshairGui:FindFirstChild("TextLabel", true)
+    local gradient = label:FindFirstChild("UIGradient")
+    
+    if dot then
+        local size = FeatureStates.CrosshairSize
+        dot.Size = UDim2.new(0, size, 0, size)
+        dot.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
+        dot.BackgroundTransparency = 1 - (FeatureStates.CrosshairOpacity / 100)
+    end
+    
+    if label then
+        label.Visible = FeatureStates.CrosshairText
+        label.Text = FeatureStates.CrosshairCustomText
+        
+        if gradient then gradient.Enabled = (FeatureStates.CrosshairTextStyle == "Rainbow") end
+        
+        if FeatureStates.CrosshairTextStyle == "UI Color" then
+            label.TextColor3 = Color3.fromRGB(147, 51, 234)
+        elseif FeatureStates.CrosshairTextStyle == "White" then
+            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end
+end
+
+local function toggleCrosshair(enabled)
+    FeatureStates.Crosshair = enabled
+    if enabled then
+        if targetGui:FindFirstChild("JuggCrosshairGui") then targetGui.JuggCrosshairGui:Destroy() end
+        
+        crosshairGui = Instance.new("ScreenGui")
+        crosshairGui.Name = "JuggCrosshairGui"
+        crosshairGui.ResetOnSpawn = false
+        crosshairGui.Parent = targetGui
+        
+        local dot = Instance.new("Frame", crosshairGui)
+        dot.Name = "Dot"
+        dot.BackgroundColor3 = Color3.fromRGB(147, 51, 234)
+        dot.BorderSizePixel = 0
+        
+        local label = Instance.new("TextLabel", crosshairGui)
+        label.Size = UDim2.new(0, 200, 0, 20)
+        label.Position = UDim2.new(0.5, -100, 0.5, 10)
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 12
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        
+        local textGradient = Instance.new("UIGradient", label)
+        textGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 50)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 100)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 0, 255))
+        })
+        
+        updateCrosshairVisuals()
+        
+        crosshairUpdateLoop = RunService.RenderStepped:Connect(function()
+            if FeatureStates.CrosshairTextStyle == "Rainbow" and textGradient.Enabled then
+                textGradient.Offset = Vector2.new(-((tick() * 1.3) % 1), 0)
+            end
+        end)
+    else
+        if crosshairUpdateLoop then crosshairUpdateLoop:Disconnect() end
+        if crosshairGui then crosshairGui:Destroy() end
+    end
+end
+
+-- Other Feature Modules
 local VOID_POS = Vector3.new(0, -500, 0)
-local orbitConnection, smoothOrbitConnection, collectConnection, antiModThread, antiAFKConnection
+local orbitConnection, smoothOrbitConnection, collectConnection, antiAFKConnection
 
 local function getClosestEnemy()
     local closest, shortestDist = nil, math.huge
@@ -573,7 +655,7 @@ local function InitializeMainMenu()
     MainFrame.BackgroundColor3 = Color3.fromRGB(9, 9, 11)
     MainFrame.BackgroundTransparency = Settings.UITransparency
     MainFrame.BorderSizePixel = 0
-    MainFrame.Visible = Settings.ShowGuiOnLoad -- Respect Silent GUI loading conditions
+    MainFrame.Visible = Settings.ShowGuiOnLoad
     MainFrame.Parent = ScreenGui
     addCorner(MainFrame, 8)
     addSafeBorder(MainFrame, Color3.fromRGB(28, 28, 35))
@@ -870,6 +952,45 @@ local function InitializeMainMenu()
         end)
     end
 
+    local function createInputRow(parent, label, configKey, default, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -130, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local TextBox = Instance.new("TextBox")
+        TextBox.Size = UDim2.new(0, 110, 0, 24)
+        TextBox.Position = UDim2.new(1, -122, 0.5, -12)
+        TextBox.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        TextBox.Text = default
+        TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TextBox.Font = Enum.Font.Gotham
+        TextBox.TextSize = 11
+        TextBox.ClearTextOnFocus = false
+        TextBox.Parent = Row
+        addCorner(TextBox, 4)
+        addSafeBorder(TextBox, Color3.fromRGB(35, 35, 45))
+
+        TextBox.FocusLost:Connect(function()
+            local text = TextBox.Text
+            FeatureStates[configKey] = text
+            if callback then callback(text) end
+        end)
+    end
+
     local function createActionButton(parent, label, callback)
         local Row = Instance.new("Frame")
         Row.Size = UDim2.new(1, -5, 0, 40)
@@ -985,6 +1106,16 @@ local function InitializeMainMenu()
     createCycleRow(VoidPage, "Movement Pattern", "MotionMode", {"None", "Spin", "Orbit", "Random", "Desync"}, FeatureStates.MotionMode, function(v) end)
     createSliderRow(VoidPage, "Movement Speed", "MotionSpeed", 0, 100, FeatureStates.MotionSpeed, "", function(v) end)
     createSliderRow(VoidPage, "Effect Radius", "OrbitRadius", 1, 200, FeatureStates.OrbitRadius, "", function(v) end)
+    
+    -- Visuals Section Integration
+    createToggleRow(VisualsPage, "Custom Crosshair Dot", "Crosshair", false, toggleCrosshair)
+    createSliderRow(VisualsPage, "Crosshair Size", "CrosshairSize", 2, 20, FeatureStates.CrosshairSize, "px", updateCrosshairVisuals)
+    createSliderRow(VisualsPage, "Crosshair Opacity", "CrosshairOpacity", 0, 100, FeatureStates.CrosshairOpacity, "%", updateCrosshairVisuals)
+
+    createToggleRow(VisualsPage, "Show Crosshair Text", "CrosshairText", false, updateCrosshairVisuals)
+    createInputRow(VisualsPage, "Custom Text", "CrosshairCustomText", FeatureStates.CrosshairCustomText, updateCrosshairVisuals)
+    createCycleRow(VisualsPage, "Text Style", "CrosshairTextStyle", {"Rainbow", "UI Color", "White"}, FeatureStates.CrosshairTextStyle, updateCrosshairVisuals)
+
     createToggleRow(MiscPage, "Anti Subspace Tripmine", "AntiTrip", false, toggleAntiTrip)
     createToggleRow(MiscPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
     createToggleRow(MiscPage, "Auto Respawn", "AutoRespawn", false, toggleAutoRespawn)
@@ -1036,18 +1167,21 @@ local function initializeCoreThreads()
     if Settings.AutoExecute then setupAutoExecute() end
     if FeatureStates.OrbitAura then toggleOrbitAura(true) end
     if FeatureStates.SmoothOrbit then toggleSmoothOrbit(true) end
-    if FeatureStates.AntiTrip then toggleAntiTrip(true) end       -- Fixed Typo
-    if FeatureStates.AutoCollect then toggleAutoCollect(true) end -- Fixed Typo
+    if FeatureStates.AntiTrip then toggleAntiTrip(true) end       
+    if FeatureStates.AutoCollect then toggleAutoCollect(true) end 
     if FeatureStates.AutoRespawn then toggleAutoRespawn(true) end
     if FeatureStates.AntiMod then toggleAntiMod(true) end
     if FeatureStates.AntiAFK then toggleAntiAFK(true) end
     if FeatureStates.FPSBoost then toggleFPSBoost(true) end
+    
+    -- Silent initialization of Visual threads
+    if FeatureStates.Crosshair then toggleCrosshair(true) end
 end
 
 --------------------------------------------------
 -- INITIALIZATION SEQUENCE 
 --------------------------------------------------
-initializeCoreThreads() -- Activates instantly on game load ignoring layout configurations
+initializeCoreThreads() 
 
 task.spawn(function()
     if Settings.ShowWatermark then
@@ -1139,6 +1273,5 @@ task.spawn(function()
         watermarkGui:Destroy()
     end
     
-    -- Handles sequential loading cleanly if animation configuration is bypassed 
     InitializeMainMenu()
 end)
