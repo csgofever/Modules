@@ -18,10 +18,16 @@ local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+
+
+--features
 local hrp = character:WaitForChild("HumanoidRootPart")
 local trip_hrp
 local rs = game:GetService("RunService")
 local trip_conn_a, trip_conn_b
+
+
 
 -- CLEAR COMPONENT: Wipes out previous menus to stop duplicate rendering
 local targetGui = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
@@ -44,6 +50,7 @@ local Settings = {
     UITransparency = 0,
     AnimationSpeed = 0.2,
     ToggleKey = Enum.KeyCode.RightShift,
+    VoidKey = Enum.KeyCode.V, -- NEW KEYBIND
     AutoExecute = true, -- AutoExecute default setting state copied from mod.lua logic
 }
 
@@ -57,6 +64,14 @@ local FeatureStates = {
     AntiMod = false,
     AntiAFK = false,
     FPSBoost = false,
+
+    -- NEW VOID FEATURES
+    VoidEnabled = false,
+    VoidDistancePercent = 100,
+    HeightOffset = 0,
+    MotionMode = "None",
+    MotionSpeed = 10,
+    OrbitRadius = 25,
 }
 
 
@@ -448,6 +463,87 @@ local function toggleFPSBoost(enabled)
 end
 
 --------------------------------------------------
+-- VOID TELEPORT SYSTEM
+--------------------------------------------------
+local OriginalCFrame
+local isReturning = false
+local returnStartTime = 0
+local returnDuration = 0.5
+local TeleportCount = 0
+local spinAngle = 0
+local voidConnection
+
+local function getVoidPosition()
+    local yOffset = (FeatureStates.VoidDistancePercent * 25000) + FeatureStates.HeightOffset
+    if FeatureStates.MotionMode == "Random" then
+        local x = math.random(-FeatureStates.OrbitRadius, FeatureStates.OrbitRadius)
+        local z = math.random(-FeatureStates.OrbitRadius, FeatureStates.OrbitRadius)
+        return Vector3.new(x, yOffset, z)
+    end
+    return Vector3.new(0, yOffset, 0)
+end
+
+local function applyVoidMotion(deltaTime)
+    if not FeatureStates.VoidEnabled then return end
+    if not hrp then return end
+
+    spinAngle = spinAngle + (FeatureStates.MotionSpeed * deltaTime)
+    local yOffset = (FeatureStates.VoidDistancePercent * 25000) + FeatureStates.HeightOffset
+
+    if FeatureStates.MotionMode == "Spin" then
+        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, spinAngle, 0)
+    elseif FeatureStates.MotionMode == "Orbit" then
+        local angle = spinAngle * 1.5
+        local x = math.cos(angle) * FeatureStates.OrbitRadius
+        local z = math.sin(angle) * FeatureStates.OrbitRadius
+        hrp.CFrame = CFrame.new(Vector3.new(x, yOffset, z))
+    elseif FeatureStates.MotionMode == "Desync" then
+        local desyncX = math.sin(spinAngle * 50) * 10
+        local desyncZ = math.cos(spinAngle * 50) * 10
+        hrp.CFrame = CFrame.new(Vector3.new(desyncX, yOffset, desyncZ)) * CFrame.Angles(math.sin(spinAngle) * 0.5, math.cos(spinAngle) * 0.5, 0)
+    end
+end
+
+local function toggleVoidHide(enabled)
+    FeatureStates.VoidEnabled = enabled
+    if enabled then
+        if hrp then OriginalCFrame = hrp.CFrame end
+        TeleportCount = TeleportCount + 1
+        
+        if not voidConnection then
+            voidConnection = RunService.Heartbeat:Connect(function(dt)
+                if not hrp then return end
+                if FeatureStates.MotionMode == "None" then
+                    hrp.CFrame = CFrame.new(getVoidPosition())
+                else
+                    applyVoidMotion(dt)
+                end
+            end)
+        end
+    else
+        isReturning = true
+        returnStartTime = tick()
+        if voidConnection then voidConnection:Disconnect(); voidConnection = nil end
+
+        -- Smooth return to OriginalCFrame
+        task.spawn(function()
+            while isReturning and OriginalCFrame and hrp do
+                local elapsed = tick() - returnStartTime
+                if elapsed < returnDuration then
+                    local alpha = elapsed / returnDuration
+                    local newPos = OriginalCFrame.Position:Lerp(hrp.Position, alpha)
+                    hrp.CFrame = CFrame.new(newPos)
+                else
+                    hrp.CFrame = OriginalCFrame
+                    isReturning = false
+                end
+                RunService.Heartbeat:Wait()
+            end
+        end)
+    end
+end
+
+--------------------------------------------------
 -- MAIN MENU GENERATION
 --------------------------------------------------
 local function InitializeMainMenu()
@@ -637,6 +733,183 @@ local function InitializeMainMenu()
         end)
     end
 
+local function createSliderRow(parent, label, configKey, min, max, default, suffix, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 50)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.BorderSizePixel = 0
+        Row.Parent = parent
+        
+        local corner1 = Instance.new("UICorner")
+        corner1.CornerRadius = UDim.new(0, 5)
+        corner1.Parent = Row
+        
+        local stroke1 = Instance.new("UIStroke")
+        stroke1.Color = Color3.fromRGB(22, 22, 26)
+        stroke1.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke1.Parent = Row
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -60, 0, 25)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local ValueLabel = Instance.new("TextLabel")
+        ValueLabel.Size = UDim2.new(0, 50, 0, 25)
+        ValueLabel.Position = UDim2.new(1, -62, 0, 0)
+        ValueLabel.BackgroundTransparency = 1
+        ValueLabel.Text = tostring(default) .. (suffix or "")
+        ValueLabel.TextColor3 = Settings.UIColor
+        ValueLabel.Font = Enum.Font.GothamBold
+        ValueLabel.TextSize = 11
+        ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        ValueLabel.Parent = Row
+
+        local SliderBg = Instance.new("TextButton")
+        SliderBg.Size = UDim2.new(1, -24, 0, 4)
+        SliderBg.Position = UDim2.new(0, 12, 0, 32)
+        SliderBg.BackgroundColor3 = Color3.fromRGB(34, 34, 38)
+        SliderBg.Text = ""
+        SliderBg.AutoButtonColor = false
+        SliderBg.Parent = Row
+        
+        local corner2 = Instance.new("UICorner")
+        corner2.CornerRadius = UDim.new(0, 4)
+        corner2.Parent = SliderBg
+
+        local SliderFill = Instance.new("Frame")
+        SliderFill.Size = UDim2.new(math.clamp((default - min) / (max - min), 0, 1), 0, 1, 0)
+        SliderFill.BackgroundColor3 = Settings.UIColor
+        SliderFill.Parent = SliderBg
+        
+        local corner3 = Instance.new("UICorner")
+        corner3.CornerRadius = UDim.new(0, 4)
+        corner3.Parent = SliderFill
+
+        local dragging = false
+        local function update(input)
+            local pos = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
+            SliderFill.Size = UDim2.new(pos, 0, 1, 0)
+            local val = math.floor(min + ((max - min) * pos))
+            FeatureStates[configKey] = val
+            ValueLabel.Text = tostring(val) .. (suffix or "")
+            if callback then callback(val) end
+        end
+
+        SliderBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then 
+                dragging = true 
+                update(input) 
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then update(input) end
+        end)
+    end
+
+    local function createCycleRow(parent, label, configKey, options, default, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.Parent = parent
+        
+        local corner1 = Instance.new("UICorner")
+        corner1.CornerRadius = UDim.new(0, 5)
+        corner1.Parent = Row
+        
+        local stroke1 = Instance.new("UIStroke")
+        stroke1.Color = Color3.fromRGB(22, 22, 26)
+        stroke1.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke1.Parent = Row
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -110, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local ActionBtn = Instance.new("TextButton")
+        ActionBtn.Size = UDim2.new(0, 90, 0, 24)
+        ActionBtn.Position = UDim2.new(1, -102, 0.5, -12)
+        ActionBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        ActionBtn.Text = default
+        ActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ActionBtn.Font = Enum.Font.GothamBold
+        ActionBtn.TextSize = 10
+        ActionBtn.Parent = Row
+        
+        local corner2 = Instance.new("UICorner")
+        corner2.CornerRadius = UDim.new(0, 4)
+        corner2.Parent = ActionBtn
+        
+        local stroke2 = Instance.new("UIStroke")
+        stroke2.Color = Settings.UIColor
+        stroke2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke2.Parent = ActionBtn
+
+        local currentIndex = table.find(options, default) or 1
+        ActionBtn.MouseButton1Click:Connect(function()
+            currentIndex = (currentIndex % #options) + 1
+            ActionBtn.Text = options[currentIndex]
+            FeatureStates[configKey] = options[currentIndex]
+            if callback then callback(options[currentIndex]) end
+        end)
+    end
+
+    local function createCycleRow(parent, label, configKey, options, default, callback)
+        local Row = Instance.new("Frame")
+        Row.Size = UDim2.new(1, -5, 0, 40)
+        Row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+        Row.Parent = parent
+        addCorner(Row, 5)
+        addSafeBorder(Row, Color3.fromRGB(22, 22, 26))
+
+        local TextLabel = Instance.new("TextLabel")
+        TextLabel.Size = UDim2.new(1, -110, 1, 0)
+        TextLabel.Position = UDim2.new(0, 12, 0, 0)
+        TextLabel.BackgroundTransparency = 1
+        TextLabel.Text = label
+        TextLabel.TextColor3 = Color3.fromRGB(210, 210, 215)
+        TextLabel.Font = Enum.Font.GothamMedium
+        TextLabel.TextSize = 11
+        TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+        TextLabel.Parent = Row
+
+        local ActionBtn = Instance.new("TextButton")
+        ActionBtn.Size = UDim2.new(0, 90, 0, 24)
+        ActionBtn.Position = UDim2.new(1, -102, 0.5, -12)
+        ActionBtn.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        ActionBtn.Text = default
+        ActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ActionBtn.Font = Enum.Font.GothamBold
+        ActionBtn.TextSize = 10
+        ActionBtn.Parent = Row
+        addCorner(ActionBtn, 4)
+        addSafeBorder(ActionBtn, Settings.UIColor)
+
+        local currentIndex = table.find(options, default) or 1
+        ActionBtn.MouseButton1Click:Connect(function()
+            currentIndex = (currentIndex % #options) + 1
+            ActionBtn.Text = options[currentIndex]
+            FeatureStates[configKey] = options[currentIndex]
+            callback(options[currentIndex])
+        end)
+    end
+
     local function createActionButton(parent, label, callback)
         local Row = Instance.new("Frame")
         Row.Size = UDim2.new(1, -5, 0, 40)
@@ -731,19 +1004,33 @@ local function InitializeMainMenu()
     end
 
 
-    local JuggPage = createTab("Jugg")
+    local OrbitPage = createTab("Orbit")
+    local VoidPage = createTab("Void")
+    local VisualsPage = createTab("Visuals")
     local MiscPage = createTab("Misc")
     local SettingsPage = createTab("Settings")
 
-    tabs["Jugg"].Page.Visible = true
-    tabs["Jugg"].Btn.BackgroundTransparency = 0
-    tabs["Jugg"].Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tabs["Orbit"].Page.Visible = true
+    tabs["Orbit"].Btn.BackgroundTransparency = 0
+    tabs["Orbit"].Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 
-    createToggleRow(JuggPage, "Orbit Kill Aura", "OrbitAura", false, toggleOrbitAura)
-    createToggleRow(JuggPage, "Smooth Orbit", "SmoothOrbit", false, toggleSmoothOrbit)
-    createToggleRow(JuggPage, "Anti Subspace Tripmine", "AntiTrip", false, toggleAntiTrip)
-    createToggleRow(JuggPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
-    createToggleRow(JuggPage, "Auto Respawn", "AutoRespawn", false, toggleAutoRespawn)
+    createToggleRow(OrbitPage, "Orbit Kill Aura", "OrbitAura", false, toggleOrbitAura)
+    createToggleRow(OrbitPage, "Smooth Orbit", "SmoothOrbit", false, toggleSmoothOrbit)
+    
+    -- Void Controls
+    createToggleRow(VoidPage, "Enable Void Hide", "VoidEnabled", false, toggleVoidHide)
+    createKeybindSelector(VoidPage, "Void Toggle Keybind", "VoidKey")
+    
+    createSliderRow(VoidPage, "Void Distance", "VoidDistancePercent", 1, 100, FeatureStates.VoidDistancePercent, "%", function(v) end)
+    createSliderRow(VoidPage, "Height Offset", "HeightOffset", -1000, 1000, FeatureStates.HeightOffset, "st", function(v) end)
+    
+    -- Motion Effects
+    createCycleRow(VoidPage, "Movement Pattern", "MotionMode", {"None", "Spin", "Orbit", "Random", "Desync"}, FeatureStates.MotionMode, function(v) end)
+    createSliderRow(VoidPage, "Movement Speed", "MotionSpeed", 0, 100, FeatureStates.MotionSpeed, "", function(v) end)
+    createSliderRow(VoidPage, "Effect Radius", "OrbitRadius", 1, 200, FeatureStates.OrbitRadius, "", function(v) end)
+    createToggleRow(MiscPage, "Anti Subspace Tripmine", "AntiTrip", false, toggleAntiTrip)
+    createToggleRow(MiscPage, "Auto Collect Drops", "AutoCollect", false, toggleAutoCollect)
+    createToggleRow(MiscPage, "Auto Respawn", "AutoRespawn", false, toggleAutoRespawn)
 
     createToggleRow(MiscPage, "Anti-Mod", "AntiMod", false, toggleAntiMod)
     createToggleRow(MiscPage, "Anti-AFK", "AntiAFK", false, toggleAntiAFK)
@@ -770,6 +1057,11 @@ local function InitializeMainMenu()
         if not processed and input.UserInputType == Enum.UserInputType.Keyboard then
             if input.KeyCode == Settings.ToggleKey then
                 MainFrame.Visible = not MainFrame.Visible
+            elseif input.KeyCode == Settings.VoidKey then
+                -- Automatically toggle Void Hide
+                local newState = not FeatureStates.VoidEnabled
+                toggleVoidHide(newState)
+                updateUIToggleVisual("VoidEnabled", false)
             end
         end
     end)
