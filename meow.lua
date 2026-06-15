@@ -1,5 +1,5 @@
 -- Execute on Teleport Wrapper
-local scriptSource = 
+local scriptURL = "https://raw.githubusercontent.com/csgofever/Modules/refs/heads/main/meow.lua"
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
@@ -69,16 +69,22 @@ button.MouseButton1Click:Connect(function()
 		button.Text = "ON"
 	end
 end)
-]]
 
--- Establish fallback support for different executors
+-- 1. Establish fallback support for different executors' teleport queues
 local teleportQueue = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport)
 
 if teleportQueue then
     pcall(function()
-        teleportQueue(scriptSource)
+        -- Queue the HTTP Get request for the next server
+        teleportQueue(string.format([[
+            pcall(function()
+                loadstring(game:HttpGet("%s"))()
+            end)
+        ]], scriptURL))
     end)
 end
 
--- Run the code normally for the current server
-loadstring(scriptSource)()
+-- 2. Run the code normally for the current server
+pcall(function()
+    loadstring(game:HttpGet(scriptURL))()
+end)
