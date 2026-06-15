@@ -1,5 +1,11 @@
+-- Execute on Teleport Wrapper
+local scriptSource = 
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
+
+-- Clean up previous UI instances to prevent them from stacking when you teleport
+local oldGui = player:WaitForChild("PlayerGui"):FindFirstChild("TeleportGui")
+if oldGui then oldGui:Destroy() end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "TeleportGui"
@@ -19,10 +25,10 @@ local label = Instance.new("TextLabel")
 label.Size = UDim2.new(1, 0, 0, 50)
 label.Position = UDim2.new(0, 0, 0, 0)
 label.Text = "meowwCL community lua"
-label.TextColor3 = Color3.fromRGB(255, 255, 255, 255)
+label.TextColor3 = Color3.fromRGB(255, 255, 255)
 label.Font = Enum.Font.Arcade
 label.TextSize = 15
-label.BackgroundColor3 = Color3.fromRGB(30, 30, 30, 30)
+label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 label.BackgroundTransparency = 1
 label.Parent = frame
 
@@ -63,3 +69,16 @@ button.MouseButton1Click:Connect(function()
 		button.Text = "ON"
 	end
 end)
+]]
+
+-- Establish fallback support for different executors
+local teleportQueue = queue_on_teleport or queueonteleport or (syn and syn.queue_on_teleport)
+
+if teleportQueue then
+    pcall(function()
+        teleportQueue(scriptSource)
+    end)
+end
+
+-- Run the code normally for the current server
+loadstring(scriptSource)()
