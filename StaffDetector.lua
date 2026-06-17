@@ -30,9 +30,9 @@ xpcall(function()
     end
 
     task.spawn(function()
-        if not isfile("AntiLua/staffdetect.mp3") then writefile("AntiLua/staffdetect.mp3", tostring(game:HttpGetAsync("https://github.com/Ukrubojvo/api/raw/main/alert.mp3"))) end
+        if not isfile("AntiLua/staffdetect.mp3") then writefile("AntiLua/staffdetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
         notify_sound = Instance.new("Sound", workspace)
-        notify_sound.SoundId = getcustomasset("AntiLua/staffdetect.mp3")
+        notify_sound.SoundId = getcustomasset("jugglua/staffdetect.mp3")
         notify_sound.Volume = 5
         notify_sound.Looped = true
     end)
@@ -44,8 +44,8 @@ xpcall(function()
                 pcall(function()
                     autoload = true;
                     autoleave = true;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/Ukrubojvo/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("Ukrubojvo", "Modules")
+                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                    local Repo = GitRequests.Repo("csgofever", "Modules")
                     loadstring(Repo:getFileContent("StaffDetector.lua"))()
                 end)
             ]])
@@ -54,8 +54,8 @@ xpcall(function()
                 pcall(function()
                     autoload = true;
                     autoleave = false;
-                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/Ukrubojvo/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
-                    local Repo = GitRequests.Repo("Ukrubojvo", "Modules")
+                    local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                    local Repo = GitRequests.Repo("csgofever", "Modules")
                     loadstring(Repo:getFileContent("StaffDetector.lua"))()
                 end)
             ]])
