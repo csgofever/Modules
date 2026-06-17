@@ -23,16 +23,16 @@ xpcall(function()
     local lp = players.LocalPlayer
     local groupId = game.CreatorId
     local notify_sound = nil
-    local CACHE_FILE = "AntiLua/staffcache_" .. groupId .. ".json"
+    local CACHE_FILE = "jugglua/staffcache_" .. groupId .. ".json"
 
     if game.CreatorType ~= Enum.CreatorType.Group then
         return
     end
 
     task.spawn(function()
-        if not isfile("AntiLua/staffdetect.mp3") then writefile("AntiLua/staffdetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
+        if not isfile("jugglua/modDetect.mp3") then writefile("jugglua/modDetect.mp3", tostring(game:HttpGetAsync("https://github.com/csgofever/api/raw/refs/heads/main/modDetect.mp3"))) end
         notify_sound = Instance.new("Sound", workspace)
-        notify_sound.SoundId = getcustomasset("jugglua/staffdetect.mp3")
+        notify_sound.SoundId = getcustomasset("jugglua/modDetect.mp3")
         notify_sound.Volume = 5
         notify_sound.Looped = true
     end)
