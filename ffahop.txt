@@ -1,0 +1,123 @@
+-- Rivals FFA Server Hopper 
+
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local placeId = game.PlaceId
+
+local HOP_ENABLED = true   -- Always ON
+local MIN_DELAY = 14
+local MAX_DELAY = 27
+
+-- ─── NEW PLAYER COUNT THRESHOLD ───
+local MIN_PLAYER_COUNT = 8 -- Triggers an automatic server hop if count drops below this number
+
+local lastHopTime = tick()
+local hopCount = 0
+
+local function getRandomDelay()
+    return MIN_DELAY + math.random() * (MAX_DELAY - MIN_DELAY)
+end
+
+local function isServerGood(server)
+    if not server or not server.id or server.id == game.JobId then
+        return false
+    end
+    if server.playing >= server.maxPlayers * 0.88 then
+        return false
+    end
+    return true
+end
+
+local function ServerHop()
+    if not HOP_ENABLED then return end
+    if tick() - lastHopTime < 8 then return end
+
+    hopCount += 1
+    print("🔄 Hop attempt #" .. hopCount)
+
+    task.wait(0.7 + math.random() * 1.6)
+
+    local success, response = pcall(function()
+        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100"
+        return HttpService:JSONDecode(game:HttpGet(url, true))
+    end)
+
+    if not success or not response or not response.data then
+        task.wait(4 + math.random() * 4)
+        return
+    end
+
+    local validServers = {}
+    for _, s in ipairs(response.data) do
+        if isServerGood(s) then
+            table.insert(validServers, s)
+        end
+    end
+
+    if #validServers == 0 then
+        task.wait(5 + math.random() * 5)
+        return
+    end
+
+    -- Shuffle
+    for i = #validServers, 2, -1 do
+        local j = math.random(i)
+        validServers[i], validServers[j] = validServers[j], validServers[i]
+    end
+
+    local target = validServers[math.random(1, math.min(6, #validServers))]
+
+    print("✅ Hopping → " .. target.playing .. "/" .. target.maxPlayers .. " players")
+
+    lastHopTime = tick()
+    task.wait(0.5 + math.random() * 1.3)
+
+    -- ─── AUTO EXECUTE ON TELEPORT LOGIC ───
+    -- Registers execution persistent script strings to execute inside the incoming server
+    local queue = queue_on_teleport or (syn and syn.queue_on_teleport)
+    if queue then
+        queue([[
+            -- Replace this placeholder string with your loadstring execution path if needed
+            -- loadstring(game:HttpGet("https://raw.githubusercontent.com/.../mod.lua"))()
+        ]])
+    end
+
+    TeleportService:TeleportToPlaceInstance(placeId, target.id, player)
+end
+
+-- Main Loop (Time-based Hop)
+task.spawn(function()
+    print("🚀 Rivals FFA Server Hopper Loaded")
+    
+    while true do
+        if HOP_ENABLED then
+            ServerHop()
+        end
+        task.wait(getRandomDelay())
+    end
+end)
+
+-- ─── PLAYER MONITOR INSTANT HOP LOOP ───
+-- Scans current player count every 3 seconds to ensure rapid hopping when servers empty out
+task.spawn(function()
+    while task.wait(3) do
+        local currentPlayers = #Players:GetPlayers()
+        if HOP_ENABLED and currentPlayers < MIN_PLAYER_COUNT then
+            print("⚠️ Low player count alert (" .. currentPlayers .. "/" .. MIN_PLAYER_COUNT .. "). Forcing hop workflow...")
+            ServerHop()
+        end
+    end
+end)
+
+-- Light anti-detection
+RunService.Heartbeat:Connect(function()
+    if math.random() < 0.01 then
+        -- Fake activity
+    end
+end)
+
+print("🛡️ Server Hopper Started (Minimum Player Threshold Set to: " .. MIN_PLAYER_COUNT .. ")")
