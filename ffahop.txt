@@ -95,8 +95,6 @@ end
 
 -- Main Loop (Time-based Hop)
 task.spawn(function()
-    print("🚀 Rivals FFA Server Hopper Loaded")
-    
     while true do
         if HOP_ENABLED then
             ServerHop()
@@ -124,4 +122,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("🛡️ Server Hopper Started (Monitoring player count threshold: " .. MIN_PLAYER_COUNT .. ")")
+-- ─── AUTO EXECUTE & MONITOR VERIFICATION PRINTS ───
+print("✨ [AUTO-EXECUTE SUCCESS] Rivals FFA Server Hopper has successfully loaded via teleport queue!")
+print("🛡️ [MONITORING ACTIVE] Currently watching player count. Threshold set to: " .. MIN_PLAYER_COUNT)
