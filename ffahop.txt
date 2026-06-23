@@ -9,18 +9,12 @@ local player = Players.LocalPlayer
 local placeId = game.PlaceId
 
 local HOP_ENABLED = true   -- Always ON
-local MIN_DELAY = 14
-local MAX_DELAY = 27
 
 -- ─── CONFIGURATION FOR PLAYER COUNT ───
-local MIN_PLAYER_COUNT = 8 -- Automatically hops if the server falls below 8 players
+local MIN_PLAYER_COUNT = 6 -- Automatically hops ONLY if the server falls below 8 players
 
 local lastHopTime = tick()
 local hopCount = 0
-
-local function getRandomDelay()
-    return MIN_DELAY + math.random() * (MAX_DELAY - MIN_DELAY)
-end
 
 local function isServerGood(server)
     if not server or not server.id or server.id == game.JobId then
@@ -93,23 +87,16 @@ local function ServerHop()
     TeleportService:TeleportToPlaceInstance(placeId, target.id, player)
 end
 
--- Main Loop (Time-based Hop)
-task.spawn(function()
-    while true do
-        if HOP_ENABLED then
-            ServerHop()
-        end
-        task.wait(getRandomDelay())
-    end
-end)
-
 -- ─── PLAYER COUNT MONITOR LOOP ───
--- Checks every 3 seconds if the server population has dropped below 8 players
+-- Checks every 3 seconds. It will ONLY hop if the population is below the threshold.
 task.spawn(function()
+    print("🚀 Rivals FFA Server Hopper Loaded")
+    print("🛡️ Monitoring Active. Will only hop if players fall below: " .. MIN_PLAYER_COUNT)
+    
     while task.wait(3) do
         local currentPlayers = #Players:GetPlayers()
         if HOP_ENABLED and currentPlayers < MIN_PLAYER_COUNT then
-            print("⚠️ Low player count detected (" .. currentPlayers .. "/" .. MIN_PLAYER_COUNT .. "). Triggering instant hop...")
+            print("⚠️ Low player count detected (" .. currentPlayers .. "/" .. MIN_PLAYER_COUNT .. "). Triggering hop...")
             ServerHop()
         end
     end
@@ -122,6 +109,5 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ─── AUTO EXECUTE & MONITOR VERIFICATION PRINTS ───
-print("✨ [AUTO-EXECUTE SUCCESS] Rivals FFA Server Hopper has successfully loaded via teleport queue!")
-print("🛡️ [MONITORING ACTIVE] Currently watching player count. Threshold set to: " .. MIN_PLAYER_COUNT)
+-- ─── AUTO EXECUTE VERIFICATION PRINT ───
+print("✨ [AUTO-EXECUTE SUCCESS] Script has successfully loaded via teleport queue!")
