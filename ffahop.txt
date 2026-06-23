@@ -12,8 +12,8 @@ local HOP_ENABLED = true   -- Always ON
 local MIN_DELAY = 14
 local MAX_DELAY = 27
 
--- ─── NEW PLAYER COUNT THRESHOLD ───
-local MIN_PLAYER_COUNT = 8 -- Triggers an automatic server hop if count drops below this number
+-- ─── CONFIGURATION FOR PLAYER COUNT ───
+local MIN_PLAYER_COUNT = 8 -- Automatically hops if the server falls below 8 players
 
 local lastHopTime = tick()
 local hopCount = 0
@@ -77,12 +77,16 @@ local function ServerHop()
     task.wait(0.5 + math.random() * 1.3)
 
     -- ─── AUTO EXECUTE ON TELEPORT LOGIC ───
-    -- Registers execution persistent script strings to execute inside the incoming server
+    -- Registers your custom GitRequests sequence to execute automatically inside the next server
     local queue = queue_on_teleport or (syn and syn.queue_on_teleport)
     if queue then
         queue([[
-            -- Replace this placeholder string with your loadstring execution path if needed
-            -- loadstring(game:HttpGet("https://raw.githubusercontent.com/.../mod.lua"))()
+            task.wait(3)
+            pcall(function()
+                local GitRequests = loadstring(game:HttpGet('https://raw.githubusercontent.com/csgofever/Roblox-GitRequests/refs/heads/main/GitRequests.lua'))()
+                local Repo = GitRequests.Repo("csgofever", "Modules")
+                loadstring(Repo:getFileContent("ffahop.txt"))()
+            end)
         ]])
     end
 
@@ -101,13 +105,13 @@ task.spawn(function()
     end
 end)
 
--- ─── PLAYER MONITOR INSTANT HOP LOOP ───
--- Scans current player count every 3 seconds to ensure rapid hopping when servers empty out
+-- ─── PLAYER COUNT MONITOR LOOP ───
+-- Checks every 3 seconds if the server population has dropped below 8 players
 task.spawn(function()
     while task.wait(3) do
         local currentPlayers = #Players:GetPlayers()
         if HOP_ENABLED and currentPlayers < MIN_PLAYER_COUNT then
-            print("⚠️ Low player count alert (" .. currentPlayers .. "/" .. MIN_PLAYER_COUNT .. "). Forcing hop workflow...")
+            print("⚠️ Low player count detected (" .. currentPlayers .. "/" .. MIN_PLAYER_COUNT .. "). Triggering instant hop...")
             ServerHop()
         end
     end
@@ -120,4 +124,4 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("🛡️ Server Hopper Started (Minimum Player Threshold Set to: " .. MIN_PLAYER_COUNT .. ")")
+print("🛡️ Server Hopper Started (Monitoring player count threshold: " .. MIN_PLAYER_COUNT .. ")")
